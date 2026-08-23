@@ -15,7 +15,7 @@
       <span class="brand-wordmark"><small>NERDSPACE LABS</small><span class="brand-divider" aria-hidden="true">//</span><strong data-product>WAYFINDER</strong></span>
     </a>
     <div class="header-actions">
-      <span class="version" data-version>Alpha 0.4.4</span>
+      <span class="version" data-version>Alpha 0.5.0</span>
       <a id="twitch-connect" class="twitch-button" href="/api/auth/login" role="button">Connect Twitch</a>
       <button id="download-button" class="ghost-button" type="button" disabled>Export report</button>
       <button id="reset-button" class="ghost-button" type="button">Reset</button>
@@ -181,6 +181,21 @@
       </section>
     </section>
   </main>
+
+  <section class="diagnostics-shell" aria-labelledby="diagnostics-title">
+    <details id="diagnostics-panel" class="diagnostics-panel">
+      <summary><span><strong id="diagnostics-title">Diagnostics log</strong><small>Privacy-safe troubleshooting for Wayfinder</small></span><span id="diagnostics-count" class="diagnostics-count">0 events</span></summary>
+      <div class="diagnostics-body">
+        <p>Wayfinder logs app state and error categories only. OAuth tokens, authorization codes, URL queries, CSV contents, revenue values, creator identities, and chat/message content are excluded.</p>
+        <div class="diagnostics-actions">
+          <button id="diagnostics-download" class="ghost-button" type="button">Download diagnostic TXT</button>
+          <button id="diagnostics-copy" class="ghost-button" type="button">Copy diagnostic log</button>
+          <button id="diagnostics-clear" class="text-button" type="button">Clear log</button>
+        </div>
+        <pre id="diagnostics-output" class="diagnostics-output">No diagnostic events recorded yet.</pre>
+      </div>
+    </details>
+  </section>
 
   <footer>
     <div><strong>Nerdspace Labs</strong><span>Wayfinder</span><span>Project by OneEyedNerdy</span></div>

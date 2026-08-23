@@ -1,37 +1,67 @@
 # Nerdspace Labs // Wayfinder
 
-**Alpha 0.4.3 — Pages Native Deployment Fix**
+**Alpha 0.5.0 — Workers + Git Architecture**
 
-Wayfinder turns Twitch analytics exports into evidence, experiments, and next actions rather than cloning Twitch Analytics. This release preserves the supported-data, revenue-privacy, OIDC, and timezone fixes from 0.4.x while making Cloudflare Pages deployment explicit and verifiable.
+Wayfinder turns Twitch analytics exports into evidence, experiments, and next actions instead of cloning Twitch Analytics.
 
-## Pages-native structure
+This release is built as a single Cloudflare Worker with Static Assets. The Worker serves the existing frontend from `public/` and explicitly routes all `/api/*` traffic through `src/index.js`.
 
-- `public/` — static interface
-- `functions/` — Pages Functions for Twitch OIDC, Helix enrichment, EventSub, TwitchTracker, and health checks
-- `migrations/` — D1 event history schema
-- `wrangler.jsonc` — authoritative Pages output + D1 binding configuration
+## Architecture
 
-No standalone Worker entrypoint and no `public/_worker.js` are used.
+- `src/index.js` — Cloudflare Worker entry point and API router
+- `public/` — static Wayfinder frontend
+- `functions/` — reusable server modules for OAuth, Twitch, EventSub, TwitchTracker, D1, and security helpers
+- `migrations/` — D1 schema
+- `wrangler.jsonc` — Worker, Static Assets, workers.dev, and D1 configuration
+- `tests/` — regression tests
 
-## Deployment verification
+## Target deployment
 
-After deploying, visit `/api/health`. If that endpoint returns JSON, Pages Functions are active. Then `/api/auth/session` should return JSON and `/api/auth/login` should redirect to Twitch.
+Worker name: `wayfinder`
 
-See `DEPLOYMENT.md` for the complete deployment sequence.
+If the Cloudflare account workers.dev subdomain is `oneeyednerdy`, the URL is:
 
-## Privacy
+`https://wayfinder.oneeyednerdy.workers.dev`
 
-The Twitch CSV is parsed locally in the browser. Revenue/earnings/payout/income fields are discarded at import and are not available to Wayfinder intelligence, reports, Cloudflare Functions, D1, Twitch, or TwitchTracker.
-
-## Authentication
-
-Wayfinder uses Twitch OIDC Authorization Code login with hardcoded `openid`, cryptographic state and nonce validation, Twitch JWKS signature validation, and a short-lived encrypted Wayfinder session. Twitch user access/refresh tokens are not retained after authentication.
-
-## Tests
+## Local development
 
 ```powershell
 npm install
 npm test
 npm run check
-npm run pages:build
+npm run dev
 ```
+
+## Deploy
+
+```powershell
+npx wrangler login
+npm run deploy
+```
+
+Then verify:
+
+- `/api/health`
+- `/api/auth/session`
+- `/api/auth/login`
+
+## Git deployments
+
+Cloudflare Workers Builds can connect this Worker to GitHub or GitLab. Pushes to the selected production branch can deploy automatically with `npx wrangler deploy`.
+
+## D1
+
+Wayfinder expects:
+
+- binding: `WAYFINDER_DB`
+- database: `nerdspace-wayfinder`
+
+The included Wrangler configuration references the existing database ID configured for this project.
+
+## Privacy boundary
+
+Revenue and other monetary fields are discarded at CSV import and are not available to Wayfinder intelligence. Uploaded CSV contents remain browser-local. Twitch user access and refresh tokens are not persisted.
+
+## Diagnostics
+
+A privacy-safe diagnostics log is available at the bottom of the interface. It intentionally excludes tokens, OAuth values, URL query strings, CSV contents, revenue, creator identity, and message/chat content.

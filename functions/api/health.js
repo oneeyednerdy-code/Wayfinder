@@ -15,8 +15,8 @@ export async function onRequestGet({ env }) {
   return json({
     ok: true,
     app: 'Nerdspace Labs Wayfinder',
-    version: '0.4.3',
-    runtime: 'cloudflare-pages-functions',
+    version: '0.5.0',
+    runtime: 'cloudflare-worker-static-assets',
     d1
   });
 }

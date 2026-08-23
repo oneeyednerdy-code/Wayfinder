@@ -1,8 +1,14 @@
-NERDSPACE LABS // WAYFINDER
-Alpha 0.4.5 - OAuth Diagnostics
+NERDSPACE LABS WAYFINDER — ALPHA 0.5.0
+WORKERS + GIT ARCHITECTURE
 
-- Fixed OAuth callback behavior that mislabeled every Twitch authorization error as "cancelled".
-- Added safe OAuth error-code mapping without exposing Twitch free-form error descriptions.
-- Added specific UI guidance for access_denied, redirect_mismatch, invalid_client, invalid_scope, invalid_request, server errors, and temporary availability errors.
-- Added /api/auth/login?force=1 retry path using Twitch force_verify=true after an access-denied response.
-- Preserves OIDC openid-only authorization, state/nonce checks, ID-token verification, token non-persistence, revenue privacy, Pages Functions, and D1/EventSub support.
+- Converted deployment architecture from Cloudflare Pages to a single Cloudflare Worker.
+- Added src/index.js as the explicit Worker entry point.
+- Added Cloudflare Workers Static Assets for the existing public/ frontend.
+- Added explicit /api/* routing for OAuth, session, Twitch enrichment, EventSub, TwitchTracker, and health endpoints.
+- Added ASSETS binding and SPA fallback.
+- Preserved D1 binding WAYFINDER_DB and the existing nerdspace-wayfinder database.
+- Preserved Twitch OIDC hardening and no-persisted-user-token design.
+- Preserved revenue privacy boundary and supported-data contract.
+- Preserved Wormhole-style privacy-safe diagnostics log.
+- Updated deployment workflow to `wrangler deploy` and Cloudflare Workers Builds Git integration.
+- Target Worker name is `wayfinder`, enabling a workers.dev URL such as wayfinder.oneeyednerdy.workers.dev when the account subdomain is oneeyednerdy.

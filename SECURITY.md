@@ -86,6 +86,12 @@ Revenue/earnings/payout/proceeds/income fields are discarded at the import bound
 This release does not require or deploy D1. Without D1, persistent EventSub history is disabled. Existing EventSub webhook verification code continues to use Twitch HMAC verification, timestamp freshness, replay protection, and minimized payloads when EventSub persistence is enabled later.
 
 
-## Cloudflare Pages deployment boundary
+## Cloudflare Worker deployment boundary
 
-Wayfinder 0.4.3 is packaged for Cloudflare Pages file-based Functions. `public/_worker.js` is intentionally absent because Pages Advanced Mode would cause Cloudflare to ignore the root `functions/` directory. `/api/health` can be used after deployment to verify that the Functions runtime and optional D1 binding are active before starting Twitch OIDC.
+Wayfinder 0.5.0 runs as a single Cloudflare Worker with Static Assets. `src/index.js` is the only Worker entry point. It explicitly routes supported `/api/*` endpoints and serves all non-API requests through the `ASSETS` binding. This removes reliance on Pages file-based Function discovery.
+
+Static responses and API responses pass through the same security-header layer because `assets.run_worker_first` is enabled.
+
+The D1 binding remains `WAYFINDER_DB`. Twitch secrets are Worker secrets and are never placed in `wrangler.jsonc`.
+
+The uploaded Twitch analytics CSV remains browser-local. Revenue fields are discarded before normalization and are not sent to the Worker.

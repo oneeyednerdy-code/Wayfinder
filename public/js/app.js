@@ -1,4 +1,5 @@
 import { APP_CONFIG } from './config.js';
+import { diagnostic, diagnosticsText, renderDiagnostics, clearDiagnostics, installGlobalDiagnostics } from './diagnostics.js';
 import { parseCSV, inferColumnMap, inferDatasetGranularity, normalizeRows, recognizedFields, unsupportedHeaders } from './csv.js';
 import { buildIntelligence } from './intelligence.js';
 import { fetchAuthSession, disconnectTwitch, syncEventSub } from './auth.js';
@@ -154,6 +155,7 @@ function bindDynamicActions() {
 }
 
 async function handleFiles(fileList) {
+  diagnostic('info', 'csv', 'CSV import started', { fileCount: fileList?.length || 0 });
   const files = [...fileList].filter((file) => file.name.toLowerCase().endsWith('.csv'));
   if (!files.length) return toast('Choose at least one CSV file.', 'warning');
   setBusy(true, 'Parsing CSV files locally…');
@@ -163,6 +165,7 @@ async function handleFiles(fileList) {
     state.files = files.map((file) => ({ name: file.name, size: file.size, type: file.type }));
     document.querySelector('#csv-file').value = ''; // Do not retain browser file handles after import.
     state.rows = result.rows;
+    diagnostic('info', 'csv', 'CSV import completed', { rowCount: result.rows.length, fileCount: files.length, privateColumnsRemoved: result.mappings.reduce((sum, item) => sum + (item.privateColumnsRemoved || 0), 0), unsupportedColumns: result.mappings.reduce((sum, item) => sum + (item.unsupported?.length || 0), 0), granularity: [...new Set(result.mappings.map((item) => item.granularity))].join(', ') });
     state.mappings = result.mappings;
     state.twitch = null;
     state.tracker = null;
@@ -170,6 +173,7 @@ async function handleFiles(fileList) {
     if (state.auth.connected) await enrichConnectedAccount();
     toast(`Analyzed ${state.rows.length} unique rows.`, 'success');
   } catch (error) {
+    diagnostic('error', 'csv', 'CSV import failed', { message: error.message || 'Unable to read CSV' });
     toast(error.message || 'Unable to read the CSV.', 'error');
   } finally {
     setBusy(false);
@@ -196,6 +200,7 @@ async function loadDemo() {
 
 async function enrichConnectedAccount() {
   if (!state.auth.connected || !state.rows.length) return;
+  diagnostic('info', 'twitch-api', 'Twitch enrichment started', { connected: true, rowCount: state.rows.length });
   setBusy(true, 'Cross-referencing Twitch…');
   sourceStatus('#source-twitch', 'idle', 'Loading', 'Authenticated Twitch request in progress');
   try {
@@ -215,9 +220,11 @@ async function enrichConnectedAccount() {
     const eventDetail = twitch.eventStorage
       ? `${twitch.events.length} supported EventSub events · ${activeSubscriptions}/4 subscriptions active or pending · ${twitch.videos.length} sanitized VOD records checked${twitch.completeness?.videos?.truncated || twitch.completeness?.clips?.truncated ? ' · safety cap reached' : ''}`
       : 'Twitch connected; D1 event history is not configured';
+    diagnostic(eventsub?.warnings?.length ? 'warning' : 'info', 'twitch-api', 'Twitch enrichment completed', { connected: true, rowCount: state.rows.length, message: eventsub?.warnings?.length ? 'EventSub warning present' : 'Supported Twitch data loaded' });
     sourceStatus('#source-twitch', eventsub?.warnings?.length ? 'warning' : 'ok', eventsub?.warnings?.length ? 'Connected with warning' : 'Connected', eventDetail);
     rebuild();
   } catch (error) {
+    diagnostic('warning', 'twitch-api', 'Twitch enrichment failed', { message: error.message, failureType: 'request' });
     sourceStatus('#source-twitch', 'warning', 'Unavailable', error.message);
     toast(error.message, 'warning');
   }
@@ -225,10 +232,12 @@ async function enrichConnectedAccount() {
   try {
     const tracker = await fetchTrackerEnrichment();
     state.tracker = tracker;
+    diagnostic('info', 'twitchtracker', 'TwitchTracker summary loaded', { source: '30-day-summary' });
     sourceStatus('#source-tracker', 'ok', 'Loaded', 'Sanitized 30-day summary; corroboration only, never authoritative');
     document.querySelector('#tracker-data').textContent = JSON.stringify(tracker.summary, null, 2);
     rebuild();
   } catch (error) {
+    diagnostic('warning', 'twitchtracker', 'TwitchTracker unavailable', { message: error.message, failureType: 'request' });
     sourceStatus('#source-tracker', 'warning', 'Unavailable', 'Analysis continues without TwitchTracker');
     document.querySelector('#tracker-data').textContent = error.message;
   } finally {
@@ -325,6 +334,7 @@ function activateTab(name) {
 }
 
 function resetDataset() {
+  diagnostic('info', 'app', 'Dataset reset');
   state.rows = []; state.files = []; state.mappings = []; state.intelligence = null; state.twitch = null; state.tracker = null;
   document.querySelector('#workspace').hidden = true;
   document.querySelector('#empty-state').hidden = false;
@@ -338,9 +348,11 @@ function resetDataset() {
 async function refreshAuth({ initial = false } = {}) {
   try {
     state.auth = await fetchAuthSession();
+    diagnostic('info', 'auth', state.auth.connected ? 'Twitch session connected' : 'Twitch session not connected', { connected: Boolean(state.auth.connected) });
     renderAuth(state.auth);
     if (!initial && state.auth.connected && state.rows.length) await enrichConnectedAccount();
   } catch (error) {
+    diagnostic('error', 'auth', 'Auth session check failed', { message: error.message, failureType: 'request' });
     state.auth = { connected: false };
     renderAuth(state.auth);
     if (!initial) toast(error.message, 'warning');
@@ -351,10 +363,11 @@ function showAuthResult() {
   const url = new URL(window.location.href);
   const auth = url.searchParams.get('auth');
   if (!auth) return;
+  diagnostic(auth === 'connected' ? 'info' : 'warning', 'oauth', `OAuth callback result: ${auth}`, { failureType: auth === 'connected' ? undefined : auth });
   if (auth === 'connected') toast('Twitch connected securely.', 'success');
   else if (auth === 'cancelled') toast('Twitch connection was cancelled.', 'warning');
   else if (auth === 'oauth_error') {
-    const reason = params.get('reason') || 'oauth_error';
+    const reason = url.searchParams.get('reason') || 'oauth_error';
     const messages = {
       access_denied: 'Twitch did not grant Wayfinder authorization. Try Connect Twitch again and approve the request.',
       redirect_mismatch: 'Twitch rejected the callback URL. The Twitch Developer Console redirect URL must exactly match TWITCH_REDIRECT_URI.',
@@ -367,7 +380,7 @@ function showAuthResult() {
     };
     toast(messages[reason] || messages.oauth_error, 'error');
     if (reason === 'access_denied') {
-      const link = document.querySelector('#auth-button');
+      const link = document.querySelector('#twitch-connect');
       if (link && !state.auth.connected) link.href = '/api/auth/login?force=1';
     }
   }
@@ -385,7 +398,9 @@ function initStaticText() {
 }
 
 async function init() {
+  installGlobalDiagnostics();
   initStaticText();
+  diagnostic('info', 'launch', 'Wayfinder launched', { runtime: 'browser' });
   showAuthResult();
   await refreshAuth({ initial: true });
   setInterval(() => refreshAuth({ initial: true }), 55 * 60_000);
@@ -426,6 +441,26 @@ async function init() {
   document.querySelector('#experiment-form').addEventListener('submit', (event) => {
     event.preventDefault(); createExperimentFromForm(); document.querySelector('#experiment-modal').close();
   });
+
+  document.querySelector('#diagnostics-download').addEventListener('click', () => {
+    const blob = new Blob([diagnosticsText(APP_CONFIG)], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `wayfinder-diagnostic-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+    diagnostic('info', 'diagnostics', 'Diagnostic TXT downloaded');
+  });
+  document.querySelector('#diagnostics-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(diagnosticsText(APP_CONFIG)); toast('Diagnostic log copied.', 'success'); }
+    catch { toast('Could not copy diagnostic log. Use Download diagnostic TXT instead.', 'warning'); }
+  });
+  document.querySelector('#diagnostics-clear').addEventListener('click', () => { clearDiagnostics(); toast('Diagnostic log cleared.', 'success'); });
+  renderDiagnostics();
 }
 
-init();
+init().catch((error) => {
+  diagnostic('error', 'launch', 'Wayfinder initialization failed', { message: error?.message || 'Unknown initialization failure' });
+  console.error(error);
+});

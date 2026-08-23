@@ -1,132 +1,126 @@
-# Wayfinder Alpha 0.4.3 — Cloudflare Pages Native Deployment
+# Nerdspace Labs Wayfinder Alpha 0.5.0 — Cloudflare Worker + Git Deployment
 
-This release is structured specifically for Cloudflare Pages + Pages Functions. Do not create a standalone Worker for this package and do not use dashboard drag-and-drop if you need Twitch OAuth or API routes.
+This release is built for a single Cloudflare Worker with Static Assets, API routing, D1, Twitch OIDC, EventSub, Twitch enrichment, TwitchTracker context, and the Wayfinder frontend.
 
-## Project layout
+## Target URL
 
-The repository root must directly contain:
+With Worker name `wayfinder` and account workers.dev subdomain `oneeyednerdy`, Cloudflare will use:
 
-- `public/` — static Wayfinder interface
-- `functions/` — Cloudflare Pages Functions
-- `migrations/` — D1 schema
-- `wrangler.jsonc` — Pages + D1 configuration
+`https://wayfinder.oneeyednerdy.workers.dev`
+
+If your Cloudflare account subdomain differs, use the hostname Cloudflare assigns.
+
+## Repository root
+
+The Git repository root must directly contain:
+
+- `src/index.js`
+- `public/`
+- `functions/`
+- `migrations/`
+- `wrangler.jsonc`
 - `package.json`
 
-There must be no `_worker.js` inside `public/`; if one exists Cloudflare Pages ignores the `functions/` directory.
+The old `functions/` modules remain as reusable server modules, but `src/index.js` is now the Worker entry point and explicitly routes `/api/*` requests.
 
-## D1 already configured in wrangler.jsonc
+## 1. Install and verify locally
 
-- Binding: `WAYFINDER_DB`
-- Database: `nerdspace-wayfinder`
-- Database ID: `10010498-356c-4a6b-8047-1fecf9dfa5e5`
+```powershell
+npm install
+npm test
+npm run check
+npm run dev
+```
 
-Apply the schema once:
+Open the local Wrangler URL and verify:
+
+- `/`
+- `/api/health`
+- `/api/auth/session`
+
+## 2. D1
+
+The included `wrangler.jsonc` already binds:
+
+- binding: `WAYFINDER_DB`
+- database: `nerdspace-wayfinder`
+
+If the database tables are not already initialized:
 
 ```powershell
 npx wrangler d1 execute nerdspace-wayfinder --remote --file=migrations/0001_wayfinder_eventsub.sql
 ```
 
-## Required Cloudflare variables/secrets
+## 3. Required Worker secrets
 
-Normal variables:
+Set these on the Worker:
 
 - `TWITCH_CLIENT_ID`
-- `TWITCH_REDIRECT_URI=https://YOUR_DOMAIN/api/auth/callback`
-- `TWITCH_EVENTSUB_CALLBACK=https://YOUR_DOMAIN/api/eventsub`
-
-Encrypted secrets:
-
 - `TWITCH_CLIENT_SECRET`
-- `SESSION_SECRET` (minimum 32 characters; use a strong random value)
-- `TWITCH_EVENTSUB_SECRET` (10–100 characters; use a separate random value)
+- `SESSION_SECRET`
+- `TWITCH_REDIRECT_URI`
+- `TWITCH_EVENTSUB_CALLBACK`
+- `TWITCH_EVENTSUB_SECRET`
 
-Wayfinder OIDC login requests only `openid`.
+For the requested hostname:
 
-## Deploy with Wrangler — recommended for the current project
+`TWITCH_REDIRECT_URI=https://wayfinder.oneeyednerdy.workers.dev/api/auth/callback`
 
-From the repository root:
+`TWITCH_EVENTSUB_CALLBACK=https://wayfinder.oneeyednerdy.workers.dev/api/eventsub`
+
+Use the exact deployed hostname if Cloudflare assigns a different account subdomain.
+
+Bulk import from JSON:
 
 ```powershell
-npm install
-npx wrangler login
-npm test
-npm run check
-npm run deploy
+npx wrangler secret bulk .\wayfinder-worker-secrets.json
 ```
 
-Because `wrangler.jsonc` includes `pages_build_output_dir`, `npm run deploy` knows to publish `./public`. Run this command from the directory containing `functions/` so Wrangler includes Pages Functions.
+## 4. Twitch Developer Console
 
-If Cloudflare asks which Pages project to use/create, choose `nerdspace-wayfinder` (or change the `name` in `wrangler.jsonc` to your actual Pages project name before deploying).
+Add this exact OAuth redirect URL:
 
-## Git-connected Pages deployment
+`https://wayfinder.oneeyednerdy.workers.dev/api/auth/callback`
 
-Use a Cloudflare **Pages** project, not a Worker.
+Wayfinder requests only the OIDC `openid` scope.
 
-- Framework preset: None
-- Build command: `exit 0`
-- Build output directory: `public`
-- Root directory: blank when `public/`, `functions/`, and `wrangler.jsonc` are at repository root
+## 5. First manual deployment
 
-When a Pages Wrangler config with `pages_build_output_dir` is committed, treat it as the project configuration source of truth.
-
-## Verify Pages Functions before Twitch login
-
-Open:
-
-`https://YOUR_DOMAIN/api/health`
-
-Expected shape:
-
-```json
-{
-  "ok": true,
-  "app": "Nerdspace Labs Wayfinder",
-  "version": "0.4.3",
-  "runtime": "cloudflare-pages-functions",
-  "d1": {
-    "configured": true,
-    "reachable": true
-  }
-}
+```powershell
+npx wrangler login
+npm run deploy
 ```
 
 Then test:
 
-`https://YOUR_DOMAIN/api/auth/session`
+- `https://wayfinder.oneeyednerdy.workers.dev/api/health`
+- `https://wayfinder.oneeyednerdy.workers.dev/api/auth/session`
+- `https://wayfinder.oneeyednerdy.workers.dev/api/auth/login`
 
-It should return JSON such as `{"connected":false}` rather than 404.
+## 6. Connect the Worker to GitHub
 
-Then open:
+Cloudflare dashboard:
 
-`https://YOUR_DOMAIN/api/auth/login`
+1. Workers & Pages
+2. Select the `wayfinder` Worker (or Create application → Import a repository)
+3. Settings → Builds
+4. Connect GitHub
+5. Select the Wayfinder repository
+6. Production branch: `main`
+7. Deploy command: `npx wrangler deploy`
 
-It should redirect to Twitch.
+Cloudflare Workers Builds can automatically deploy every push to the selected branch.
 
-## Twitch Developer Console
-
-The OAuth redirect must exactly match `TWITCH_REDIRECT_URI`, for example:
-
-`https://YOUR_DOMAIN/api/auth/callback`
-
-Do not add `/` to one version but not the other. Protocol, host, path and port must match.
-
-## Local development
-
-Create `.dev.vars` from `.dev.vars.example`, then run:
+## 7. Production workflow
 
 ```powershell
-npm install
-npm run dev
+git add .
+git commit -m "Wayfinder update"
+git push origin main
 ```
 
-Wrangler uses the Pages config automatically. Local D1 uses Wrangler's local persistence; production D1 is not modified by normal local development.
+Cloudflare then builds and deploys the Worker from Git.
 
-## Important deployment warning
+## Privacy
 
-Dashboard drag-and-drop can serve the static files but does not compile a `functions/` directory. That produces exactly this failure pattern:
-
-- `/` works
-- `/api/auth/session` = 404
-- Twitch authentication = 404
-
-Deploy with Wrangler or Git-integrated Cloudflare Pages whenever Wayfinder Pages Functions are required.
+Revenue is discarded at the browser CSV import boundary. Uploaded CSV contents are not sent to the Worker. Twitch user access and refresh tokens are not persisted. D1 stores only the narrow EventSub/creator context defined by Wayfinder.

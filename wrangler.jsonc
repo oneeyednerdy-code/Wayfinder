@@ -1,15 +1,21 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "nerdspace-wayfinder",
-  "pages_build_output_dir": "./public",
+  "name": "wayfinder",
+  "main": "src/index.js",
   "compatibility_date": "2026-08-23",
+  "workers_dev": true,
   "upload_source_maps": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
   "d1_databases": [
     {
       "binding": "WAYFINDER_DB",
       "database_name": "nerdspace-wayfinder",
-      "database_id": "10010498-356c-4a6b-8047-1fecf9dfa5e5",
-      "preview_database_id": "WAYFINDER_DB"
+      "database_id": "10010498-356c-4a6b-8047-1fecf9dfa5e5"
     }
   ]
 }

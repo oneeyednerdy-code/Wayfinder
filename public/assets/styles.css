@@ -481,3 +481,18 @@ textarea:focus-visible { outline-color: var(--purple-2); }
   .brand-wordmark strong { font-size: 18px; }
   .brand-divider { font-size: 11px; }
 }
+
+/* Wayfinder 0.4.7 — privacy-safe diagnostics */
+.diagnostics-shell { max-width:1180px; margin:38px auto 0; padding:0 24px 12px; }
+.diagnostics-panel { border:1px solid var(--line); border-radius:var(--radius); background:rgba(14,10,19,.74); overflow:hidden; }
+.diagnostics-panel summary { cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 18px; list-style:none; }
+.diagnostics-panel summary::-webkit-details-marker { display:none; }
+.diagnostics-panel summary span:first-child { display:grid; gap:3px; }
+.diagnostics-panel summary strong { color:var(--text); font-size:13px; text-transform:uppercase; letter-spacing:.08em; }
+.diagnostics-panel summary small { color:var(--muted); font-size:11px; }
+.diagnostics-count { color:var(--purple-2); font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.diagnostics-body { border-top:1px solid var(--line); padding:16px 18px 18px; }
+.diagnostics-body > p { margin:0 0 14px; color:var(--muted); font-size:11px; line-height:1.55; }
+.diagnostics-actions { display:flex; flex-wrap:wrap; gap:9px; margin-bottom:12px; }
+.diagnostics-output { max-height:360px; overflow:auto; margin:0; padding:14px; border:1px solid var(--line); border-radius:10px; background:#08070b; color:#d9d1e5; font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
+@media (max-width:680px) { .diagnostics-shell { padding-inline:14px; } .diagnostics-panel summary { align-items:flex-start; } }
