@@ -1,0 +1,1450 @@
+------formdata-undici-006637967645
+Content-Disposition: form-data; name="metadata"
+
+{"main_module":"functionsWorker-0.6533333032080751.js"}
+------formdata-undici-006637967645
+Content-Disposition: form-data; name="functionsWorker-0.6533333032080751.js"; filename="functionsWorker-0.6533333032080751.js"
+Content-Type: application/javascript+module
+
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// lib/http.js
+function json(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      ...headers
+    }
+  });
+}
+__name(json, "json");
+function redirect(location, headers = {}) {
+  return new Response(null, {
+    status: 302,
+    headers: { Location: location, "cache-control": "no-store", ...headers }
+  });
+}
+__name(redirect, "redirect");
+function cookieName(request, base) {
+  return new URL(request.url).protocol === "https:" ? `__Host-${base}` : `${base}_dev`;
+}
+__name(cookieName, "cookieName");
+function serializeCookie(name, value, options = {}) {
+  const parts = [`${name}=${value}`];
+  parts.push(`Path=${options.path || "/"}`);
+  if (options.maxAge != null) parts.push(`Max-Age=${Math.max(0, Math.floor(options.maxAge))}`);
+  if (options.httpOnly !== false) parts.push("HttpOnly");
+  if (options.secure !== false) parts.push("Secure");
+  parts.push(`SameSite=${options.sameSite || "Lax"}`);
+  return parts.join("; ");
+}
+__name(serializeCookie, "serializeCookie");
+function clearCookie(name, secure = true) {
+  return serializeCookie(name, "", { maxAge: 0, secure });
+}
+__name(clearCookie, "clearCookie");
+function parseCookies(request) {
+  const header = request.headers.get("Cookie") || "";
+  return Object.fromEntries(header.split(";").map((part) => part.trim()).filter(Boolean).map((part) => {
+    const index = part.indexOf("=");
+    if (index < 0) return [part, ""];
+    return [part.slice(0, index), part.slice(index + 1)];
+  }));
+}
+__name(parseCookies, "parseCookies");
+function requireSameOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (origin) return origin === new URL(request.url).origin;
+  const fetchSite = request.headers.get("Sec-Fetch-Site");
+  if (fetchSite) return fetchSite === "same-origin" || fetchSite === "none";
+  return true;
+}
+__name(requireSameOrigin, "requireSameOrigin");
+function secureCookieForRequest(request) {
+  return new URL(request.url).protocol === "https:";
+}
+__name(secureCookieForRequest, "secureCookieForRequest");
+
+// lib/crypto.js
+var encoder = new TextEncoder();
+var decoder = new TextDecoder();
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  const chunk = 32768;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+__name(bytesToBase64Url, "bytesToBase64Url");
+function base64UrlToBytes(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+__name(base64UrlToBytes, "base64UrlToBytes");
+async function deriveKey(secret2, usage) {
+  if (!secret2 || secret2.length < 32) throw new Error("SESSION_SECRET must be at least 32 characters.");
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(secret2));
+  return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, usage);
+}
+__name(deriveKey, "deriveKey");
+async function sealJson(value, secret2) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(secret2, ["encrypt"]);
+  const plaintext = encoder.encode(JSON.stringify(value));
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext));
+  const combined = new Uint8Array(iv.length + encrypted.length);
+  combined.set(iv, 0);
+  combined.set(encrypted, iv.length);
+  return bytesToBase64Url(combined);
+}
+__name(sealJson, "sealJson");
+async function openJson(value, secret2) {
+  if (!value) return null;
+  try {
+    const bytes = base64UrlToBytes(value);
+    if (bytes.length < 29) return null;
+    const iv = bytes.slice(0, 12);
+    const encrypted = bytes.slice(12);
+    const key = await deriveKey(secret2, ["decrypt"]);
+    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
+    return JSON.parse(decoder.decode(plaintext));
+  } catch {
+    return null;
+  }
+}
+__name(openJson, "openJson");
+function randomToken(bytes = 32) {
+  return bytesToBase64Url(crypto.getRandomValues(new Uint8Array(bytes)));
+}
+__name(randomToken, "randomToken");
+async function hmacSha256Hex(secret2, message) {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret2), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(message)));
+  return [...signature].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+__name(hmacSha256Hex, "hmacSha256Hex");
+function timingSafeEqualText(a, b) {
+  const left = encoder.encode(String(a || ""));
+  const right = encoder.encode(String(b || ""));
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) diff |= left[i] ^ right[i];
+  return diff === 0;
+}
+__name(timingSafeEqualText, "timingSafeEqualText");
+
+// lib/twitch.js
+var cachedAppToken = null;
+var appTokenExpiresAt = 0;
+var cachedJwks = null;
+var jwksExpiresAt = 0;
+var OIDC_ISSUER = "https://id.twitch.tv/oauth2";
+var OIDC_JWKS = "https://id.twitch.tv/oauth2/keys";
+var TWITCH_LOGIN_SCOPES = Object.freeze(["openid"]);
+async function readJson(response) {
+  return response.json().catch(() => ({}));
+}
+__name(readJson, "readJson");
+function requireOAuthConfig(env) {
+  if (!env.TWITCH_CLIENT_ID || !env.TWITCH_CLIENT_SECRET) throw new Error("Twitch OAuth is not configured.");
+}
+__name(requireOAuthConfig, "requireOAuthConfig");
+function buildAuthorizeUrl(env, state, nonce, { forceVerify = false } = {}) {
+  requireOAuthConfig(env);
+  if (!env.TWITCH_REDIRECT_URI) throw new Error("TWITCH_REDIRECT_URI is required.");
+  if (!state || !nonce) throw new Error("OIDC state and nonce are required.");
+  const url = new URL("https://id.twitch.tv/oauth2/authorize");
+  url.searchParams.set("client_id", env.TWITCH_CLIENT_ID);
+  url.searchParams.set("redirect_uri", env.TWITCH_REDIRECT_URI);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", TWITCH_LOGIN_SCOPES.join(" "));
+  url.searchParams.set("state", state);
+  url.searchParams.set("nonce", nonce);
+  if (forceVerify) url.searchParams.set("force_verify", "true");
+  return url.toString();
+}
+__name(buildAuthorizeUrl, "buildAuthorizeUrl");
+async function exchangeCode(env, code) {
+  requireOAuthConfig(env);
+  const body = new URLSearchParams({
+    client_id: env.TWITCH_CLIENT_ID,
+    client_secret: env.TWITCH_CLIENT_SECRET,
+    code,
+    grant_type: "authorization_code",
+    redirect_uri: env.TWITCH_REDIRECT_URI
+  });
+  const response = await fetch("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body
+  });
+  const payload = await readJson(response);
+  if (!response.ok || !payload.access_token || !payload.id_token) throw new Error(payload.message || "Unable to complete Twitch OIDC authorization.");
+  return payload;
+}
+__name(exchangeCode, "exchangeCode");
+function decodeBase64UrlJson(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+__name(decodeBase64UrlJson, "decodeBase64UrlJson");
+async function getJwks(force = false) {
+  if (!force && cachedJwks && Date.now() < jwksExpiresAt) return cachedJwks;
+  const response = await fetch(OIDC_JWKS, { headers: { Accept: "application/json" } });
+  const payload = await readJson(response);
+  if (!response.ok || !Array.isArray(payload.keys)) throw new Error("Unable to load Twitch OIDC signing keys.");
+  cachedJwks = payload.keys;
+  jwksExpiresAt = Date.now() + 60 * 60 * 1e3;
+  return cachedJwks;
+}
+__name(getJwks, "getJwks");
+async function verifyIdToken(env, idToken, expectedNonce) {
+  requireOAuthConfig(env);
+  const parts = String(idToken || "").split(".");
+  if (parts.length !== 3) throw new Error("Invalid Twitch ID token format.");
+  const header = decodeBase64UrlJson(parts[0]);
+  const claims = decodeBase64UrlJson(parts[1]);
+  if (header.alg !== "RS256" || !header.kid) throw new Error("Unsupported Twitch ID token signature.");
+  let jwks = await getJwks();
+  let jwk = jwks.find((key2) => key2.kid === header.kid && key2.kty === "RSA");
+  if (!jwk) {
+    jwks = await getJwks(true);
+    jwk = jwks.find((key2) => key2.kid === header.kid && key2.kty === "RSA");
+  }
+  if (!jwk) throw new Error("Twitch signing key was not found.");
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+  const sigText = parts[2].replace(/-/g, "+").replace(/_/g, "/");
+  const sigPadded = sigText + "=".repeat((4 - sigText.length % 4) % 4);
+  const signature = Uint8Array.from(atob(sigPadded), (c) => c.charCodeAt(0));
+  if (!await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, data)) throw new Error("Twitch ID token signature validation failed.");
+  const now = Math.floor(Date.now() / 1e3);
+  const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (claims.iss !== OIDC_ISSUER) throw new Error("Twitch ID token issuer mismatch.");
+  if (!audience.includes(env.TWITCH_CLIENT_ID)) throw new Error("Twitch ID token audience mismatch.");
+  if (claims.azp && claims.azp !== env.TWITCH_CLIENT_ID) throw new Error("Twitch ID token authorized-party mismatch.");
+  if (!claims.sub) throw new Error("Twitch ID token is missing a subject.");
+  if (!Number.isFinite(Number(claims.exp)) || Number(claims.exp) <= now - 60) throw new Error("Twitch ID token is expired.");
+  if (Number(claims.iat || 0) > now + 120) throw new Error("Twitch ID token issue time is invalid.");
+  if (!expectedNonce || !timingSafeEqualText(claims.nonce || "", expectedNonce)) throw new Error("Twitch OIDC nonce validation failed.");
+  return claims;
+}
+__name(verifyIdToken, "verifyIdToken");
+async function getAppToken(env) {
+  requireOAuthConfig(env);
+  if (cachedAppToken && Date.now() < appTokenExpiresAt - 6e4) return cachedAppToken;
+  const body = new URLSearchParams({ client_id: env.TWITCH_CLIENT_ID, client_secret: env.TWITCH_CLIENT_SECRET, grant_type: "client_credentials" });
+  const response = await fetch("https://id.twitch.tv/oauth2/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
+  const payload = await readJson(response);
+  if (!response.ok || !payload.access_token) throw new Error(payload.message || "Unable to get Twitch app access token.");
+  cachedAppToken = payload.access_token;
+  appTokenExpiresAt = Date.now() + (Number(payload.expires_in) || 3600) * 1e3;
+  return cachedAppToken;
+}
+__name(getAppToken, "getAppToken");
+async function helix(env, token, path, params = {}) {
+  const url = new URL(`https://api.twitch.tv/helix/${path}`);
+  for (const [key, value] of Object.entries(params)) if (value !== void 0 && value !== null && value !== "") url.searchParams.append(key, value);
+  const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}`, "Client-Id": env.TWITCH_CLIENT_ID, Accept: "application/json" } });
+  return { ok: response.ok, status: response.status, payload: await readJson(response) };
+}
+__name(helix, "helix");
+async function helixOrThrow(env, token, path, params = {}) {
+  const result = await helix(env, token, path, params);
+  if (!result.ok) throw new Error(result.payload.message || `Twitch ${path} request failed (${result.status}).`);
+  return result.payload;
+}
+__name(helixOrThrow, "helixOrThrow");
+async function safeHelix(env, token, path, params = {}) {
+  try {
+    return await helixOrThrow(env, token, path, params);
+  } catch (error) {
+    return { data: [], error: error.message };
+  }
+}
+__name(safeHelix, "safeHelix");
+async function safeHelixPaged(env, token, path, params = {}, maxPages = 5) {
+  const data = [];
+  let after = null;
+  let pages = 0;
+  try {
+    do {
+      const payload = await helixOrThrow(env, token, path, { ...params, ...after ? { after } : {} });
+      data.push(...payload.data || []);
+      after = payload.pagination?.cursor || null;
+      pages += 1;
+    } while (after && pages < maxPages);
+    return { data, pages, truncated: Boolean(after), error: null };
+  } catch (error) {
+    return { data, pages, truncated: Boolean(after), error: error.message };
+  }
+}
+__name(safeHelixPaged, "safeHelixPaged");
+
+// lib/session.js
+var SESSION_BASE = "wayfinder_session";
+var STATE_BASE = "wayfinder_oauth_state";
+var SESSION_MAX_AGE = 60 * 60 * 8;
+var STATE_MAX_AGE = 600;
+function secret(env) {
+  if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) throw new Error("SESSION_SECRET must be configured with at least 32 random characters.");
+  return env.SESSION_SECRET;
+}
+__name(secret, "secret");
+async function makeOauthStateCookie(request, env, state, nonce) {
+  const secure = secureCookieForRequest(request);
+  const value = await sealJson({ state, nonce, createdAt: Date.now() }, secret(env));
+  return serializeCookie(cookieName(request, STATE_BASE), value, { maxAge: STATE_MAX_AGE, secure });
+}
+__name(makeOauthStateCookie, "makeOauthStateCookie");
+async function readOauthState(request, env) {
+  return openJson(parseCookies(request)[cookieName(request, STATE_BASE)], secret(env));
+}
+__name(readOauthState, "readOauthState");
+function clearOauthStateCookie(request) {
+  return clearCookie(cookieName(request, STATE_BASE), secureCookieForRequest(request));
+}
+__name(clearOauthStateCookie, "clearOauthStateCookie");
+async function makeSessionCookie(request, env, session) {
+  const secure = secureCookieForRequest(request);
+  const now = Date.now();
+  const payload = {
+    sessionId: session.sessionId || randomToken(24),
+    user: session.user,
+    csrf: session.csrf || randomToken(24),
+    authMethod: "twitch-oidc",
+    issuedAt: session.issuedAt || now,
+    absoluteExpiresAt: session.absoluteExpiresAt || now + SESSION_MAX_AGE * 1e3,
+    eventsub: session.eventsub || null
+  };
+  const value = await sealJson(payload, secret(env));
+  if (value.length > 3800) throw new Error("Encrypted session is too large for a secure cookie.");
+  return serializeCookie(cookieName(request, SESSION_BASE), value, { maxAge: SESSION_MAX_AGE, secure });
+}
+__name(makeSessionCookie, "makeSessionCookie");
+async function readSession(request, env) {
+  return openJson(parseCookies(request)[cookieName(request, SESSION_BASE)], secret(env));
+}
+__name(readSession, "readSession");
+function clearSessionCookie(request) {
+  return clearCookie(cookieName(request, SESSION_BASE), secureCookieForRequest(request));
+}
+__name(clearSessionCookie, "clearSessionCookie");
+async function ensureValidSession(request, env) {
+  const session = await readSession(request, env);
+  const now = Date.now();
+  if (!session?.user?.id || !session?.csrf || session.authMethod !== "twitch-oidc") return { session: null, setCookie: null, reason: "missing" };
+  if (!Number.isFinite(Number(session.absoluteExpiresAt)) || Number(session.absoluteExpiresAt) <= now) return { session: null, setCookie: null, reason: "expired" };
+  if (!Number.isFinite(Number(session.issuedAt)) || Number(session.issuedAt) > now + 12e4) return { session: null, setCookie: null, reason: "invalid_time" };
+  if (now - Number(session.issuedAt) >= 60 * 60 * 1e3) {
+    const rotated = { ...session, sessionId: randomToken(24), issuedAt: now };
+    return { session: rotated, setCookie: await makeSessionCookie(request, env, rotated), reason: "rotated" };
+  }
+  return { session, setCookie: null, reason: "valid" };
+}
+__name(ensureValidSession, "ensureValidSession");
+
+// lib/db.js
+async function ensureDb(env) {
+  const db = env.WAYFINDER_DB;
+  if (!db) return false;
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS connected_creators (
+      user_id TEXT PRIMARY KEY,
+      login TEXT NOT NULL,
+      display_name TEXT,
+      connected_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS eventsub_subscriptions (
+      subscription_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS eventsub_events (
+      message_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      subscription_type TEXT NOT NULL,
+      occurred_at TEXT,
+      received_at TEXT NOT NULL,
+      event_json TEXT NOT NULL
+    )`),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_wayfinder_events_user_time ON eventsub_events(user_id, occurred_at)")
+  ]);
+  return true;
+}
+__name(ensureDb, "ensureDb");
+async function upsertCreator(env, user) {
+  if (!await ensureDb(env)) return false;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await env.WAYFINDER_DB.prepare(`INSERT INTO connected_creators(user_id, login, display_name, connected_at, last_seen_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET login=excluded.login, display_name=excluded.display_name, last_seen_at=excluded.last_seen_at`).bind(user.id, user.login, user.display_name || user.login, now, now).run();
+  return true;
+}
+__name(upsertCreator, "upsertCreator");
+async function deleteCreatorData(env, userId) {
+  if (!env.WAYFINDER_DB) return;
+  await ensureDb(env);
+  await env.WAYFINDER_DB.batch([
+    env.WAYFINDER_DB.prepare("DELETE FROM eventsub_events WHERE user_id = ?").bind(userId),
+    env.WAYFINDER_DB.prepare("DELETE FROM eventsub_subscriptions WHERE user_id = ?").bind(userId),
+    env.WAYFINDER_DB.prepare("DELETE FROM connected_creators WHERE user_id = ?").bind(userId)
+  ]);
+}
+__name(deleteCreatorData, "deleteCreatorData");
+async function saveSubscription(env, subscription, userId) {
+  if (!env.WAYFINDER_DB) return;
+  await ensureDb(env);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await env.WAYFINDER_DB.prepare(`INSERT INTO eventsub_subscriptions(subscription_id, user_id, type, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(subscription_id) DO UPDATE SET status=excluded.status, updated_at=excluded.updated_at`).bind(subscription.id, userId, subscription.type, subscription.status, subscription.created_at || now, now).run();
+}
+__name(saveSubscription, "saveSubscription");
+async function updateSubscriptionStatus(env, subscriptionId, status) {
+  if (!env.WAYFINDER_DB) return;
+  await ensureDb(env);
+  await env.WAYFINDER_DB.prepare("UPDATE eventsub_subscriptions SET status = ?, updated_at = ? WHERE subscription_id = ?").bind(status, (/* @__PURE__ */ new Date()).toISOString(), subscriptionId).run();
+}
+__name(updateSubscriptionStatus, "updateSubscriptionStatus");
+async function eventAlreadySeen(env, messageId) {
+  if (!env.WAYFINDER_DB) return false;
+  await ensureDb(env);
+  const row = await env.WAYFINDER_DB.prepare("SELECT message_id FROM eventsub_events WHERE message_id = ?").bind(messageId).first();
+  return Boolean(row);
+}
+__name(eventAlreadySeen, "eventAlreadySeen");
+async function saveEvent(env, { messageId, userId, type, occurredAt, event }) {
+  if (!env.WAYFINDER_DB) return false;
+  await ensureDb(env);
+  await env.WAYFINDER_DB.prepare(`INSERT OR IGNORE INTO eventsub_events(message_id, user_id, subscription_type, occurred_at, received_at, event_json)
+    VALUES (?, ?, ?, ?, ?, ?)`).bind(messageId, userId, type, occurredAt || null, (/* @__PURE__ */ new Date()).toISOString(), JSON.stringify(event)).run();
+  return true;
+}
+__name(saveEvent, "saveEvent");
+async function getEvents(env, userId, days = 180) {
+  if (!env.WAYFINDER_DB) return [];
+  await ensureDb(env);
+  const cutoff = new Date(Date.now() - Math.min(Math.max(days, 1), 365) * 864e5).toISOString();
+  const result = await env.WAYFINDER_DB.prepare(`SELECT message_id, subscription_type, occurred_at, event_json
+    FROM eventsub_events WHERE user_id = ? AND (occurred_at IS NULL OR occurred_at >= ?)
+    ORDER BY COALESCE(occurred_at, received_at) DESC LIMIT 1000`).bind(userId, cutoff).all();
+  return (result.results || []).map((row) => ({
+    messageId: row.message_id,
+    type: row.subscription_type,
+    occurredAt: row.occurred_at,
+    event: JSON.parse(row.event_json)
+  }));
+}
+__name(getEvents, "getEvents");
+
+// lib/eventsub.js
+var USER_SUBSCRIPTIONS = [
+  { type: "channel.raid", version: "1", condition: /* @__PURE__ */ __name((id) => ({ to_broadcaster_user_id: id }), "condition") },
+  { type: "stream.online", version: "1", condition: /* @__PURE__ */ __name((id) => ({ broadcaster_user_id: id }), "condition") },
+  { type: "stream.offline", version: "1", condition: /* @__PURE__ */ __name((id) => ({ broadcaster_user_id: id }), "condition") },
+  { type: "channel.update", version: "2", condition: /* @__PURE__ */ __name((id) => ({ broadcaster_user_id: id }), "condition") }
+];
+function sameCondition(a = {}, b = {}) {
+  return Object.entries(b).every(([key, value]) => a?.[key] === value);
+}
+__name(sameCondition, "sameCondition");
+async function createSubscription(env, appToken, spec, condition) {
+  const response = await fetch("https://api.twitch.tv/helix/eventsub/subscriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${appToken}`,
+      "Client-Id": env.TWITCH_CLIENT_ID,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      type: spec.type,
+      version: spec.version,
+      condition,
+      transport: {
+        method: "webhook",
+        callback: env.TWITCH_EVENTSUB_CALLBACK,
+        secret: env.TWITCH_EVENTSUB_SECRET
+      }
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || `HTTP ${response.status}`);
+  return payload.data?.[0] || null;
+}
+__name(createSubscription, "createSubscription");
+async function ensureSubscriptions(env, userId) {
+  if (!env.WAYFINDER_DB) return { configured: false, created: [], warnings: ["WAYFINDER_DB is not bound, so EventSub history is disabled."] };
+  if (!env.TWITCH_EVENTSUB_CALLBACK || !env.TWITCH_EVENTSUB_SECRET) return { configured: false, created: [], warnings: ["EventSub is not configured."] };
+  if (env.TWITCH_EVENTSUB_SECRET.length < 10 || env.TWITCH_EVENTSUB_SECRET.length > 100) return { configured: false, created: [], warnings: ["TWITCH_EVENTSUB_SECRET must be 10\u2013100 ASCII characters."] };
+  const appToken = await getAppToken(env);
+  const existingPayload = await listSubscriptions(env, appToken, { user_id: userId });
+  const existing = existingPayload;
+  const created = [];
+  const warnings = [];
+  for (const spec of USER_SUBSCRIPTIONS) {
+    const condition = spec.condition(userId);
+    const already = existing.find((item) => item.type === spec.type && sameCondition(item.condition, condition) && !String(item.status).includes("revoked"));
+    if (already) {
+      created.push({ type: spec.type, status: already.status, id: already.id, reused: true });
+      await saveSubscription(env, already, userId);
+      continue;
+    }
+    try {
+      const subscription = await createSubscription(env, appToken, spec, condition);
+      if (subscription) {
+        created.push({ type: spec.type, status: subscription.status, id: subscription.id, reused: false });
+        await saveSubscription(env, subscription, userId);
+      }
+    } catch (error) {
+      warnings.push(`${spec.type}: ${error.message}`);
+    }
+  }
+  const revokeSpec = { type: "user.authorization.revoke", version: "1" };
+  const revokeCondition = { client_id: env.TWITCH_CLIENT_ID };
+  const revokeExisting = await listSubscriptions(env, appToken, { type: revokeSpec.type });
+  const existingRevoke = revokeExisting.find((item) => item.type === revokeSpec.type && sameCondition(item.condition, revokeCondition) && !String(item.status).includes("revoked"));
+  if (!existingRevoke) {
+    try {
+      const subscription = await createSubscription(env, appToken, revokeSpec, revokeCondition);
+      if (subscription) await saveSubscription(env, subscription, "__app__");
+    } catch (error) {
+      warnings.push(`user.authorization.revoke: ${error.message}`);
+    }
+  }
+  return { configured: true, created, warnings };
+}
+__name(ensureSubscriptions, "ensureSubscriptions");
+async function listSubscriptions(env, appToken, filter = {}) {
+  const items = [];
+  let after = null;
+  let pages = 0;
+  do {
+    const payload = await helixOrThrow(env, appToken, "eventsub/subscriptions", {
+      ...filter,
+      ...after ? { after } : {}
+    });
+    items.push(...payload.data || []);
+    after = payload.pagination?.cursor || null;
+    pages += 1;
+  } while (after && pages < 25);
+  return items;
+}
+__name(listSubscriptions, "listSubscriptions");
+async function deleteSubscriptionsForUser(env, userId) {
+  if (!env.TWITCH_CLIENT_ID || !env.TWITCH_CLIENT_SECRET) return;
+  try {
+    const appToken = await getAppToken(env);
+    const matches = await listSubscriptions(env, appToken, { user_id: userId });
+    await Promise.all(matches.map((item) => fetch(`https://api.twitch.tv/helix/eventsub/subscriptions?id=${encodeURIComponent(item.id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${appToken}`, "Client-Id": env.TWITCH_CLIENT_ID }
+    }).catch(() => null)));
+  } catch {
+  }
+}
+__name(deleteSubscriptionsForUser, "deleteSubscriptionsForUser");
+
+// lib/rate-limit.js
+var buckets = /* @__PURE__ */ new Map();
+function clientKey(request) {
+  return request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || "unknown";
+}
+__name(clientKey, "clientKey");
+function checkRateLimit(request, namespace, { limit = 20, windowMs = 10 * 60 * 1e3 } = {}) {
+  const now = Date.now();
+  const key = `${namespace}:${clientKey(request)}`;
+  const current = buckets.get(key);
+  if (!current || now >= current.resetAt) {
+    buckets.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, remaining: Math.max(0, limit - 1), retryAfter: 0 };
+  }
+  current.count += 1;
+  if (buckets.size > 5e3) {
+    for (const [bucketKey, value] of buckets) if (now >= value.resetAt) buckets.delete(bucketKey);
+  }
+  const allowed = current.count <= limit;
+  return { allowed, remaining: Math.max(0, limit - current.count), retryAfter: allowed ? 0 : Math.max(1, Math.ceil((current.resetAt - now) / 1e3)) };
+}
+__name(checkRateLimit, "checkRateLimit");
+
+// api/auth/callback.js
+function home(request, query = "") {
+  const url = new URL("/", request.url);
+  url.search = query;
+  return url.toString();
+}
+__name(home, "home");
+async function onRequestGet({ request, env }) {
+  const rate = checkRateLimit(request, "oauth-callback", { limit: 30, windowMs: 10 * 60 * 1e3 });
+  if (!rate.allowed) return redirect(home(request, "?auth=rate_limited"), { "Set-Cookie": clearOauthStateCookie(request), "Retry-After": String(rate.retryAfter) });
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const oauthError = url.searchParams.get("error");
+  const stateCookie = await readOauthState(request, env).catch(() => null);
+  const clearState = clearOauthStateCookie(request);
+  if (oauthError) {
+    const known = /* @__PURE__ */ new Set(["access_denied", "redirect_mismatch", "invalid_request", "invalid_client", "invalid_scope", "server_error", "temporarily_unavailable"]);
+    const safeError = known.has(oauthError) ? oauthError : "oauth_error";
+    return redirect(home(request, `?auth=oauth_error&reason=${encodeURIComponent(safeError)}`), { "Set-Cookie": clearState });
+  }
+  const stateFresh = stateCookie?.createdAt && Date.now() - Number(stateCookie.createdAt) <= 6e5;
+  if (!code || !state || !stateCookie?.state || !stateCookie?.nonce || !stateFresh || !timingSafeEqualText(state, stateCookie.state)) {
+    return redirect(home(request, "?auth=state_error"), { "Set-Cookie": clearState });
+  }
+  try {
+    const token = await exchangeCode(env, code);
+    const claims = await verifyIdToken(env, token.id_token, stateCookie.nonce);
+    const appToken = await getAppToken(env);
+    const userPayload = await helixOrThrow(env, appToken, "users", { id: claims.sub });
+    const user = userPayload.data?.[0];
+    if (!user || user.id !== claims.sub) throw new Error("Unable to confirm Twitch identity.");
+    const session = {
+      sessionId: randomToken(24),
+      csrf: randomToken(24),
+      user: { id: user.id, login: user.login, displayName: user.display_name, broadcasterType: user.broadcaster_type || "", profileImageUrl: user.profile_image_url || "" }
+    };
+    await upsertCreator(env, { id: user.id, login: user.login, display_name: user.display_name }).catch(() => false);
+    const eventsub = await ensureSubscriptions(env, user.id).catch((error) => ({ configured: false, warnings: [error.message] }));
+    const sessionCookie = await makeSessionCookie(request, env, { ...session, eventsub });
+    const headers = new Headers({ Location: home(request, "?auth=connected"), "cache-control": "no-store" });
+    headers.append("Set-Cookie", clearState);
+    headers.append("Set-Cookie", sessionCookie);
+    return new Response(null, { status: 302, headers });
+  } catch (error) {
+    console.error("Wayfinder OIDC callback failed:", error?.message || error);
+    return redirect(home(request, "?auth=error"), { "Set-Cookie": clearState });
+  }
+}
+__name(onRequestGet, "onRequestGet");
+
+// api/auth/disconnect.js
+async function onRequestPost({ request, env, waitUntil }) {
+  if (!requireSameOrigin(request)) return json({ error: "Cross-origin request rejected." }, 403);
+  const session = await readSession(request, env).catch(() => null);
+  const csrf = request.headers.get("X-Wayfinder-CSRF") || "";
+  if (!session?.csrf || !timingSafeEqualText(session.csrf, csrf)) return json({ error: "CSRF validation failed." }, 403);
+  if (session?.user?.id) {
+    waitUntil(deleteSubscriptionsForUser(env, session.user.id));
+    waitUntil(deleteCreatorData(env, session.user.id));
+  }
+  return json({ disconnected: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+}
+__name(onRequestPost, "onRequestPost");
+
+// api/auth/login.js
+async function onRequestGet2({ request, env }) {
+  try {
+    const rate = checkRateLimit(request, "oauth-login", { limit: 20, windowMs: 10 * 60 * 1e3 });
+    if (!rate.allowed) return json({ error: "Too many Twitch login attempts. Try again shortly." }, 429, { "Retry-After": String(rate.retryAfter) });
+    const url = new URL(request.url);
+    const forceVerify = url.searchParams.get("force") === "1";
+    const state = randomToken(32);
+    const nonce = randomToken(32);
+    const cookie = await makeOauthStateCookie(request, env, state, nonce);
+    return redirect(buildAuthorizeUrl(env, state, nonce, { forceVerify }), { "Set-Cookie": cookie });
+  } catch (error) {
+    return json({ error: error.message || "Unable to start Twitch authorization." }, 503);
+  }
+}
+__name(onRequestGet2, "onRequestGet");
+
+// api/auth/session.js
+async function onRequestGet3({ request, env }) {
+  try {
+    const result = await ensureValidSession(request, env);
+    if (!result.session) return json({ connected: false }, 200, { "Set-Cookie": clearSessionCookie(request) });
+    return json({ connected: true, ...result.session }, 200, result.setCookie ? { "Set-Cookie": result.setCookie } : {});
+  } catch (error) {
+    return json({ connected: false, error: error.message || "Unable to validate Wayfinder session." }, 503);
+  }
+}
+__name(onRequestGet3, "onRequestGet");
+
+// api/eventsub/sync.js
+async function onRequestPost2({ request, env }) {
+  if (!requireSameOrigin(request)) return json({ error: "Cross-origin request rejected." }, 403);
+  const auth = await ensureValidSession(request, env).catch(() => ({ session: null }));
+  if (!auth.session) {
+    return json({ error: "Connect Twitch to configure EventSub." }, 401, { "Set-Cookie": clearSessionCookie(request) });
+  }
+  const csrf = request.headers.get("X-Wayfinder-CSRF") || "";
+  if (!auth.session.csrf || !timingSafeEqualText(auth.session.csrf, csrf)) {
+    return json({ error: "CSRF validation failed." }, 403);
+  }
+  try {
+    const eventsub = await ensureSubscriptions(env, auth.session.user.id);
+    const sessionCookie = await makeSessionCookie(request, env, { ...auth.session, eventsub });
+    return json({ eventsub }, 200, { "Set-Cookie": sessionCookie });
+  } catch (error) {
+    return json({ error: error.message || "Unable to configure EventSub." }, 502, auth.setCookie ? { "Set-Cookie": auth.setCookie } : {});
+  }
+}
+__name(onRequestPost2, "onRequestPost");
+
+// lib/data-contract.js
+function pick(obj, keys) {
+  const out = {};
+  for (const key of keys) if (obj && obj[key] !== void 0) out[key] = obj[key];
+  return out;
+}
+__name(pick, "pick");
+function numberOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+__name(numberOrNull, "numberOrNull");
+function sanitizeChannel(channel) {
+  if (!channel) return null;
+  const out = pick(channel, ["broadcaster_id", "broadcaster_login", "broadcaster_name", "broadcaster_language", "game_id", "game_name", "title", "tags", "content_classification_labels", "is_branded_content"]);
+  return out;
+}
+__name(sanitizeChannel, "sanitizeChannel");
+function sanitizeVideo(video) {
+  return pick(video, ["id", "stream_id", "user_id", "user_login", "user_name", "title", "created_at", "published_at", "url", "view_count", "language", "type", "duration"]);
+}
+__name(sanitizeVideo, "sanitizeVideo");
+function sanitizeClip(clip) {
+  return pick(clip, ["id", "video_id", "game_id", "title", "view_count", "created_at", "duration", "vod_offset", "url"]);
+}
+__name(sanitizeClip, "sanitizeClip");
+function sanitizeSchedule(schedule) {
+  if (!schedule || typeof schedule !== "object") return null;
+  return {
+    broadcaster_id: schedule.broadcaster_id,
+    broadcaster_name: schedule.broadcaster_name,
+    broadcaster_login: schedule.broadcaster_login,
+    vacation: schedule.vacation ? pick(schedule.vacation, ["start_time", "end_time"]) : null,
+    segments: Array.isArray(schedule.segments) ? schedule.segments.map((segment) => ({
+      ...pick(segment, ["id", "start_time", "end_time", "title", "canceled_until", "is_recurring"]),
+      category: segment.category ? pick(segment.category, ["id", "name"]) : null
+    })) : []
+  };
+}
+__name(sanitizeSchedule, "sanitizeSchedule");
+function sanitizeEvent(type, event = {}) {
+  if (type === "channel.raid") return pick(event, ["from_broadcaster_user_id", "from_broadcaster_user_login", "from_broadcaster_user_name", "to_broadcaster_user_id", "to_broadcaster_user_login", "to_broadcaster_user_name", "viewers"]);
+  if (type === "stream.online") return pick(event, ["id", "broadcaster_user_id", "broadcaster_user_login", "broadcaster_user_name", "type", "started_at"]);
+  if (type === "stream.offline") return pick(event, ["broadcaster_user_id", "broadcaster_user_login", "broadcaster_user_name"]);
+  if (type === "channel.update") return pick(event, ["broadcaster_user_id", "broadcaster_user_login", "broadcaster_user_name", "title", "language", "category_id", "category_name", "content_classification_labels"]);
+  return {};
+}
+__name(sanitizeEvent, "sanitizeEvent");
+var TRACKER_KEYS = ["rank", "minutes_streamed", "avg_viewers", "max_viewers", "hours_watched", "followers", "followers_total"];
+function sanitizeTrackerSummary(data) {
+  const out = {};
+  for (const key of TRACKER_KEYS) {
+    const value = numberOrNull(data?.[key]);
+    if (value !== null) out[key] = value;
+  }
+  return out;
+}
+__name(sanitizeTrackerSummary, "sanitizeTrackerSummary");
+var DATA_CONTRACT_VERSION = "2026-08-23";
+
+// api/twitch/data.js
+async function onRequestGet4({ request, env }) {
+  try {
+    const auth = await ensureValidSession(request, env);
+    if (!auth.session) return json({ error: "Connect Twitch to use enrichment." }, 401, { "Set-Cookie": clearSessionCookie(request) });
+    const userId = auth.session.user.id;
+    const appToken = await getAppToken(env);
+    const now = /* @__PURE__ */ new Date();
+    const startedAt = new Date(now.getTime() - 90 * 864e5).toISOString();
+    const [channelPayload, videosPayload, clipsPayload, schedulePayload, events] = await Promise.all([
+      safeHelix(env, appToken, "channels", { broadcaster_id: userId }),
+      safeHelixPaged(env, appToken, "videos", { user_id: userId, type: "archive", first: "100" }, 5),
+      safeHelixPaged(env, appToken, "clips", { broadcaster_id: userId, started_at: startedAt, ended_at: now.toISOString(), first: "100" }, 5),
+      safeHelix(env, appToken, "schedule", { broadcaster_id: userId, first: "25" }),
+      getEvents(env, userId, 180).catch(() => [])
+    ]);
+    const safeEvents = events.filter((e) => ["channel.raid", "stream.online", "stream.offline", "channel.update"].includes(e.type)).map((e) => ({ messageId: e.messageId, type: e.type, occurredAt: e.occurredAt, event: sanitizeEvent(e.type, e.event) }));
+    return json({
+      fetchedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      contractVersion: DATA_CONTRACT_VERSION,
+      role: "official-context",
+      authModel: "oidc-login-plus-app-token",
+      user: auth.session.user,
+      channel: sanitizeChannel(channelPayload.data?.[0] || null),
+      videos: (videosPayload.data || []).map(sanitizeVideo),
+      clips: (clipsPayload.data || []).map(sanitizeClip),
+      schedule: sanitizeSchedule(schedulePayload.data || null),
+      events: safeEvents,
+      completeness: { videos: { pages: videosPayload.pages || 0, truncated: Boolean(videosPayload.truncated) }, clips: { pages: clipsPayload.pages || 0, truncated: Boolean(clipsPayload.truncated) } },
+      eventStorage: Boolean(env.WAYFINDER_DB),
+      warnings: [channelPayload.error, videosPayload.error, clipsPayload.error, schedulePayload.error, videosPayload.truncated ? "Video history hit the 500-record safety cap." : null, clipsPayload.truncated ? "Clip history hit the 500-record safety cap." : null].filter(Boolean)
+    }, 200, auth.setCookie ? { "Set-Cookie": auth.setCookie } : {});
+  } catch (error) {
+    return json({ error: error.message || "Twitch enrichment failed." }, 502);
+  }
+}
+__name(onRequestGet4, "onRequestGet");
+
+// api/eventsub.js
+function text(body, status = 200) {
+  return new Response(status === 204 ? null : body, { status, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+}
+__name(text, "text");
+function eventUserId(type, event, subscription) {
+  if (type === "channel.raid") return event.to_broadcaster_user_id || subscription?.condition?.to_broadcaster_user_id || null;
+  return event.broadcaster_user_id || subscription?.condition?.broadcaster_user_id || null;
+}
+__name(eventUserId, "eventUserId");
+function eventTime(type, event, messageTimestamp) {
+  if (type === "stream.online") return event.started_at || messageTimestamp;
+  if (type === "channel.raid") return messageTimestamp;
+  return messageTimestamp;
+}
+__name(eventTime, "eventTime");
+async function onRequestPost3({ request, env, waitUntil }) {
+  if (!env.TWITCH_EVENTSUB_SECRET) return text("EventSub not configured.", 503);
+  const messageId = request.headers.get("Twitch-Eventsub-Message-Id") || "";
+  const timestamp = request.headers.get("Twitch-Eventsub-Message-Timestamp") || "";
+  const signature = request.headers.get("Twitch-Eventsub-Message-Signature") || "";
+  const messageType = request.headers.get("Twitch-Eventsub-Message-Type") || "";
+  const rawBody = await request.text();
+  const parsedTime = Date.parse(timestamp);
+  if (!messageId || !timestamp || !signature || !Number.isFinite(parsedTime) || Math.abs(Date.now() - parsedTime) > 10 * 6e4) {
+    return text("Invalid or stale EventSub message.", 403);
+  }
+  const expected = `sha256=${await hmacSha256Hex(env.TWITCH_EVENTSUB_SECRET, `${messageId}${timestamp}${rawBody}`)}`;
+  if (!timingSafeEqualText(expected, signature)) return text("Invalid signature.", 403);
+  let payload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return text("Invalid JSON.", 400);
+  }
+  if (messageType === "webhook_callback_verification") {
+    return text(payload.challenge || "", 200);
+  }
+  if (messageType === "revocation") {
+    waitUntil(updateSubscriptionStatus(env, payload.subscription?.id, payload.subscription?.status || "revoked"));
+    return text("", 204);
+  }
+  if (messageType !== "notification") return text("", 204);
+  if (await eventAlreadySeen(env, messageId).catch(() => false)) return text("", 204);
+  const type = payload.subscription?.type || request.headers.get("Twitch-Eventsub-Subscription-Type") || "unknown";
+  const event = payload.event || {};
+  if (type === "user.authorization.revoke" && event.user_id) {
+    waitUntil(deleteSubscriptionsForUser(env, event.user_id));
+    waitUntil(deleteCreatorData(env, event.user_id));
+    return text("", 204);
+  }
+  const userId = eventUserId(type, event, payload.subscription);
+  if (userId) {
+    waitUntil(saveEvent(env, {
+      messageId,
+      userId,
+      type,
+      occurredAt: eventTime(type, event, timestamp),
+      event: sanitizeEvent(type, event)
+    }));
+  }
+  return text("", 204);
+}
+__name(onRequestPost3, "onRequestPost");
+
+// api/health.js
+async function onRequestGet5({ env }) {
+  let d1 = { configured: false, reachable: false };
+  if (env.WAYFINDER_DB) {
+    d1.configured = true;
+    try {
+      const result = await env.WAYFINDER_DB.prepare("SELECT 1 AS ok").first();
+      d1.reachable = Number(result?.ok) === 1;
+    } catch {
+      d1.reachable = false;
+    }
+  }
+  return json({
+    ok: true,
+    app: "Nerdspace Labs Wayfinder",
+    version: "0.4.3",
+    runtime: "cloudflare-pages-functions",
+    d1
+  });
+}
+__name(onRequestGet5, "onRequestGet");
+
+// api/twitchtracker.js
+async function onRequestGet6({ request, env }) {
+  const auth = await ensureValidSession(request, env).catch(() => ({ session: null }));
+  if (!auth.session) return json({ error: "Connect Twitch before requesting TwitchTracker context." }, 401, { "Set-Cookie": clearSessionCookie(request) });
+  const login = auth.session.user.login;
+  try {
+    const response = await fetch(`https://twitchtracker.com/api/channels/summary/${encodeURIComponent(login)}`, {
+      headers: { Accept: "application/json", "User-Agent": "Nerdspace-Labs-Wayfinder/0.4" }
+    });
+    if (!response.ok) return json({ error: `TwitchTracker returned ${response.status}. Wayfinder analysis remains available.` }, 502, auth.setCookie ? { "Set-Cookie": auth.setCookie } : {});
+    const raw = await response.json();
+    const summary = sanitizeTrackerSummary(raw);
+    if (!Object.keys(summary).length) return json({ error: "TwitchTracker returned no supported summary fields. Wayfinder ignored the response." }, 502, auth.setCookie ? { "Set-Cookie": auth.setCookie } : {});
+    return json({
+      fetchedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      source: "TwitchTracker channel summary (30 days)",
+      role: "supplemental-corroboration-only",
+      contractVersion: DATA_CONTRACT_VERSION,
+      summary
+    }, 200, auth.setCookie ? { "Set-Cookie": auth.setCookie } : {});
+  } catch {
+    return json({ error: "TwitchTracker is temporarily unavailable. Wayfinder analysis remains available." }, 502, auth.setCookie ? { "Set-Cookie": auth.setCookie } : {});
+  }
+}
+__name(onRequestGet6, "onRequestGet");
+
+// _middleware.js
+async function onRequest(context) {
+  const response = await context.next();
+  const headers = new Headers(response.headers);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://static-cdn.jtvnw.net data:; connect-src 'self'; font-src 'self'");
+  if (new URL(context.request.url).protocol === "https:") headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+__name(onRequest, "onRequest");
+
+// ../.wrangler/tmp/pages-FE9JHC/functionsRoutes-0.5586179444280857.mjs
+var routes = [
+  {
+    routePath: "/api/auth/callback",
+    mountPath: "/api/auth",
+    method: "GET",
+    middlewares: [],
+    modules: [onRequestGet]
+  },
+  {
+    routePath: "/api/auth/disconnect",
+    mountPath: "/api/auth",
+    method: "POST",
+    middlewares: [],
+    modules: [onRequestPost]
+  },
+  {
+    routePath: "/api/auth/login",
+    mountPath: "/api/auth",
+    method: "GET",
+    middlewares: [],
+    modules: [onRequestGet2]
+  },
+  {
+    routePath: "/api/auth/session",
+    mountPath: "/api/auth",
+    method: "GET",
+    middlewares: [],
+    modules: [onRequestGet3]
+  },
+  {
+    routePath: "/api/eventsub/sync",
+    mountPath: "/api/eventsub",
+    method: "POST",
+    middlewares: [],
+    modules: [onRequestPost2]
+  },
+  {
+    routePath: "/api/twitch/data",
+    mountPath: "/api/twitch",
+    method: "GET",
+    middlewares: [],
+    modules: [onRequestGet4]
+  },
+  {
+    routePath: "/api/eventsub",
+    mountPath: "/api",
+    method: "POST",
+    middlewares: [],
+    modules: [onRequestPost3]
+  },
+  {
+    routePath: "/api/health",
+    mountPath: "/api",
+    method: "GET",
+    middlewares: [],
+    modules: [onRequestGet5]
+  },
+  {
+    routePath: "/api/twitchtracker",
+    mountPath: "/api",
+    method: "GET",
+    middlewares: [],
+    modules: [onRequestGet6]
+  },
+  {
+    routePath: "/",
+    mountPath: "/",
+    method: "",
+    middlewares: [onRequest],
+    modules: []
+  }
+];
+
+// ../../../../AppData/Local/npm-cache/_npx/32026684e21afda6/node_modules/path-to-regexp/dist.es2015/index.js
+function lexer(str) {
+  var tokens = [];
+  var i = 0;
+  while (i < str.length) {
+    var char = str[i];
+    if (char === "*" || char === "+" || char === "?") {
+      tokens.push({ type: "MODIFIER", index: i, value: str[i++] });
+      continue;
+    }
+    if (char === "\\") {
+      tokens.push({ type: "ESCAPED_CHAR", index: i++, value: str[i++] });
+      continue;
+    }
+    if (char === "{") {
+      tokens.push({ type: "OPEN", index: i, value: str[i++] });
+      continue;
+    }
+    if (char === "}") {
+      tokens.push({ type: "CLOSE", index: i, value: str[i++] });
+      continue;
+    }
+    if (char === ":") {
+      var name = "";
+      var j = i + 1;
+      while (j < str.length) {
+        var code = str.charCodeAt(j);
+        if (
+          // `0-9`
+          code >= 48 && code <= 57 || // `A-Z`
+          code >= 65 && code <= 90 || // `a-z`
+          code >= 97 && code <= 122 || // `_`
+          code === 95
+        ) {
+          name += str[j++];
+          continue;
+        }
+        break;
+      }
+      if (!name)
+        throw new TypeError("Missing parameter name at ".concat(i));
+      tokens.push({ type: "NAME", index: i, value: name });
+      i = j;
+      continue;
+    }
+    if (char === "(") {
+      var count = 1;
+      var pattern = "";
+      var j = i + 1;
+      if (str[j] === "?") {
+        throw new TypeError('Pattern cannot start with "?" at '.concat(j));
+      }
+      while (j < str.length) {
+        if (str[j] === "\\") {
+          pattern += str[j++] + str[j++];
+          continue;
+        }
+        if (str[j] === ")") {
+          count--;
+          if (count === 0) {
+            j++;
+            break;
+          }
+        } else if (str[j] === "(") {
+          count++;
+          if (str[j + 1] !== "?") {
+            throw new TypeError("Capturing groups are not allowed at ".concat(j));
+          }
+        }
+        pattern += str[j++];
+      }
+      if (count)
+        throw new TypeError("Unbalanced pattern at ".concat(i));
+      if (!pattern)
+        throw new TypeError("Missing pattern at ".concat(i));
+      tokens.push({ type: "PATTERN", index: i, value: pattern });
+      i = j;
+      continue;
+    }
+    tokens.push({ type: "CHAR", index: i, value: str[i++] });
+  }
+  tokens.push({ type: "END", index: i, value: "" });
+  return tokens;
+}
+__name(lexer, "lexer");
+function parse(str, options) {
+  if (options === void 0) {
+    options = {};
+  }
+  var tokens = lexer(str);
+  var _a = options.prefixes, prefixes = _a === void 0 ? "./" : _a, _b = options.delimiter, delimiter = _b === void 0 ? "/#?" : _b;
+  var result = [];
+  var key = 0;
+  var i = 0;
+  var path = "";
+  var tryConsume = /* @__PURE__ */ __name(function(type) {
+    if (i < tokens.length && tokens[i].type === type)
+      return tokens[i++].value;
+  }, "tryConsume");
+  var mustConsume = /* @__PURE__ */ __name(function(type) {
+    var value2 = tryConsume(type);
+    if (value2 !== void 0)
+      return value2;
+    var _a2 = tokens[i], nextType = _a2.type, index = _a2.index;
+    throw new TypeError("Unexpected ".concat(nextType, " at ").concat(index, ", expected ").concat(type));
+  }, "mustConsume");
+  var consumeText = /* @__PURE__ */ __name(function() {
+    var result2 = "";
+    var value2;
+    while (value2 = tryConsume("CHAR") || tryConsume("ESCAPED_CHAR")) {
+      result2 += value2;
+    }
+    return result2;
+  }, "consumeText");
+  var isSafe = /* @__PURE__ */ __name(function(value2) {
+    for (var _i = 0, delimiter_1 = delimiter; _i < delimiter_1.length; _i++) {
+      var char2 = delimiter_1[_i];
+      if (value2.indexOf(char2) > -1)
+        return true;
+    }
+    return false;
+  }, "isSafe");
+  var safePattern = /* @__PURE__ */ __name(function(prefix2) {
+    var prev = result[result.length - 1];
+    var prevText = prefix2 || (prev && typeof prev === "string" ? prev : "");
+    if (prev && !prevText) {
+      throw new TypeError('Must have text between two parameters, missing text after "'.concat(prev.name, '"'));
+    }
+    if (!prevText || isSafe(prevText))
+      return "[^".concat(escapeString(delimiter), "]+?");
+    return "(?:(?!".concat(escapeString(prevText), ")[^").concat(escapeString(delimiter), "])+?");
+  }, "safePattern");
+  while (i < tokens.length) {
+    var char = tryConsume("CHAR");
+    var name = tryConsume("NAME");
+    var pattern = tryConsume("PATTERN");
+    if (name || pattern) {
+      var prefix = char || "";
+      if (prefixes.indexOf(prefix) === -1) {
+        path += prefix;
+        prefix = "";
+      }
+      if (path) {
+        result.push(path);
+        path = "";
+      }
+      result.push({
+        name: name || key++,
+        prefix,
+        suffix: "",
+        pattern: pattern || safePattern(prefix),
+        modifier: tryConsume("MODIFIER") || ""
+      });
+      continue;
+    }
+    var value = char || tryConsume("ESCAPED_CHAR");
+    if (value) {
+      path += value;
+      continue;
+    }
+    if (path) {
+      result.push(path);
+      path = "";
+    }
+    var open = tryConsume("OPEN");
+    if (open) {
+      var prefix = consumeText();
+      var name_1 = tryConsume("NAME") || "";
+      var pattern_1 = tryConsume("PATTERN") || "";
+      var suffix = consumeText();
+      mustConsume("CLOSE");
+      result.push({
+        name: name_1 || (pattern_1 ? key++ : ""),
+        pattern: name_1 && !pattern_1 ? safePattern(prefix) : pattern_1,
+        prefix,
+        suffix,
+        modifier: tryConsume("MODIFIER") || ""
+      });
+      continue;
+    }
+    mustConsume("END");
+  }
+  return result;
+}
+__name(parse, "parse");
+function match(str, options) {
+  var keys = [];
+  var re = pathToRegexp(str, keys, options);
+  return regexpToFunction(re, keys, options);
+}
+__name(match, "match");
+function regexpToFunction(re, keys, options) {
+  if (options === void 0) {
+    options = {};
+  }
+  var _a = options.decode, decode = _a === void 0 ? function(x) {
+    return x;
+  } : _a;
+  return function(pathname) {
+    var m = re.exec(pathname);
+    if (!m)
+      return false;
+    var path = m[0], index = m.index;
+    var params = /* @__PURE__ */ Object.create(null);
+    var _loop_1 = /* @__PURE__ */ __name(function(i2) {
+      if (m[i2] === void 0)
+        return "continue";
+      var key = keys[i2 - 1];
+      if (key.modifier === "*" || key.modifier === "+") {
+        params[key.name] = m[i2].split(key.prefix + key.suffix).map(function(value) {
+          return decode(value, key);
+        });
+      } else {
+        params[key.name] = decode(m[i2], key);
+      }
+    }, "_loop_1");
+    for (var i = 1; i < m.length; i++) {
+      _loop_1(i);
+    }
+    return { path, index, params };
+  };
+}
+__name(regexpToFunction, "regexpToFunction");
+function escapeString(str) {
+  return str.replace(/([.+*?=^!:${}()[\]|/\\])/g, "\\$1");
+}
+__name(escapeString, "escapeString");
+function flags(options) {
+  return options && options.sensitive ? "" : "i";
+}
+__name(flags, "flags");
+function regexpToRegexp(path, keys) {
+  if (!keys)
+    return path;
+  var groupsRegex = /\((?:\?<(.*?)>)?(?!\?)/g;
+  var index = 0;
+  var execResult = groupsRegex.exec(path.source);
+  while (execResult) {
+    keys.push({
+      // Use parenthesized substring match if available, index otherwise
+      name: execResult[1] || index++,
+      prefix: "",
+      suffix: "",
+      modifier: "",
+      pattern: ""
+    });
+    execResult = groupsRegex.exec(path.source);
+  }
+  return path;
+}
+__name(regexpToRegexp, "regexpToRegexp");
+function arrayToRegexp(paths, keys, options) {
+  var parts = paths.map(function(path) {
+    return pathToRegexp(path, keys, options).source;
+  });
+  return new RegExp("(?:".concat(parts.join("|"), ")"), flags(options));
+}
+__name(arrayToRegexp, "arrayToRegexp");
+function stringToRegexp(path, keys, options) {
+  return tokensToRegexp(parse(path, options), keys, options);
+}
+__name(stringToRegexp, "stringToRegexp");
+function tokensToRegexp(tokens, keys, options) {
+  if (options === void 0) {
+    options = {};
+  }
+  var _a = options.strict, strict = _a === void 0 ? false : _a, _b = options.start, start = _b === void 0 ? true : _b, _c = options.end, end = _c === void 0 ? true : _c, _d = options.encode, encode = _d === void 0 ? function(x) {
+    return x;
+  } : _d, _e = options.delimiter, delimiter = _e === void 0 ? "/#?" : _e, _f = options.endsWith, endsWith = _f === void 0 ? "" : _f;
+  var endsWithRe = "[".concat(escapeString(endsWith), "]|$");
+  var delimiterRe = "[".concat(escapeString(delimiter), "]");
+  var route = start ? "^" : "";
+  for (var _i = 0, tokens_1 = tokens; _i < tokens_1.length; _i++) {
+    var token = tokens_1[_i];
+    if (typeof token === "string") {
+      route += escapeString(encode(token));
+    } else {
+      var prefix = escapeString(encode(token.prefix));
+      var suffix = escapeString(encode(token.suffix));
+      if (token.pattern) {
+        if (keys)
+          keys.push(token);
+        if (prefix || suffix) {
+          if (token.modifier === "+" || token.modifier === "*") {
+            var mod = token.modifier === "*" ? "?" : "";
+            route += "(?:".concat(prefix, "((?:").concat(token.pattern, ")(?:").concat(suffix).concat(prefix, "(?:").concat(token.pattern, "))*)").concat(suffix, ")").concat(mod);
+          } else {
+            route += "(?:".concat(prefix, "(").concat(token.pattern, ")").concat(suffix, ")").concat(token.modifier);
+          }
+        } else {
+          if (token.modifier === "+" || token.modifier === "*") {
+            throw new TypeError('Can not repeat "'.concat(token.name, '" without a prefix and suffix'));
+          }
+          route += "(".concat(token.pattern, ")").concat(token.modifier);
+        }
+      } else {
+        route += "(?:".concat(prefix).concat(suffix, ")").concat(token.modifier);
+      }
+    }
+  }
+  if (end) {
+    if (!strict)
+      route += "".concat(delimiterRe, "?");
+    route += !options.endsWith ? "$" : "(?=".concat(endsWithRe, ")");
+  } else {
+    var endToken = tokens[tokens.length - 1];
+    var isEndDelimited = typeof endToken === "string" ? delimiterRe.indexOf(endToken[endToken.length - 1]) > -1 : endToken === void 0;
+    if (!strict) {
+      route += "(?:".concat(delimiterRe, "(?=").concat(endsWithRe, "))?");
+    }
+    if (!isEndDelimited) {
+      route += "(?=".concat(delimiterRe, "|").concat(endsWithRe, ")");
+    }
+  }
+  return new RegExp(route, flags(options));
+}
+__name(tokensToRegexp, "tokensToRegexp");
+function pathToRegexp(path, keys, options) {
+  if (path instanceof RegExp)
+    return regexpToRegexp(path, keys);
+  if (Array.isArray(path))
+    return arrayToRegexp(path, keys, options);
+  return stringToRegexp(path, keys, options);
+}
+__name(pathToRegexp, "pathToRegexp");
+
+// ../../../../AppData/Local/npm-cache/_npx/32026684e21afda6/node_modules/wrangler/templates/pages-template-worker.ts
+var escapeRegex = /[.+?^${}()|[\]\\]/g;
+function* executeRequest(request) {
+  const requestPath = new URL(request.url).pathname;
+  for (const route of [...routes].reverse()) {
+    if (route.method && route.method !== request.method) {
+      continue;
+    }
+    const routeMatcher = match(route.routePath.replace(escapeRegex, "\\$&"), {
+      end: false
+    });
+    const mountMatcher = match(route.mountPath.replace(escapeRegex, "\\$&"), {
+      end: false
+    });
+    const matchResult = routeMatcher(requestPath);
+    const mountMatchResult = mountMatcher(requestPath);
+    if (matchResult && mountMatchResult) {
+      for (const handler of route.middlewares.flat()) {
+        yield {
+          handler,
+          params: matchResult.params,
+          path: mountMatchResult.path
+        };
+      }
+    }
+  }
+  for (const route of routes) {
+    if (route.method && route.method !== request.method) {
+      continue;
+    }
+    const routeMatcher = match(route.routePath.replace(escapeRegex, "\\$&"), {
+      end: true
+    });
+    const mountMatcher = match(route.mountPath.replace(escapeRegex, "\\$&"), {
+      end: false
+    });
+    const matchResult = routeMatcher(requestPath);
+    const mountMatchResult = mountMatcher(requestPath);
+    if (matchResult && mountMatchResult && route.modules.length) {
+      for (const handler of route.modules.flat()) {
+        yield {
+          handler,
+          params: matchResult.params,
+          path: matchResult.path
+        };
+      }
+      break;
+    }
+  }
+}
+__name(executeRequest, "executeRequest");
+var pages_template_worker_default = {
+  async fetch(originalRequest, env, workerContext) {
+    let request = originalRequest;
+    const handlerIterator = executeRequest(request);
+    let data = {};
+    let isFailOpen = false;
+    const next = /* @__PURE__ */ __name(async (input, init) => {
+      if (input !== void 0) {
+        let url = input;
+        if (typeof input === "string") {
+          url = new URL(input, request.url).toString();
+        }
+        request = new Request(url, init);
+      }
+      const result = handlerIterator.next();
+      if (result.done === false) {
+        const { handler, params, path } = result.value;
+        const context = {
+          request: new Request(request.clone()),
+          functionPath: path,
+          next,
+          params,
+          get data() {
+            return data;
+          },
+          set data(value) {
+            if (typeof value !== "object" || value === null) {
+              throw new Error("context.data must be an object");
+            }
+            data = value;
+          },
+          env,
+          waitUntil: workerContext.waitUntil.bind(workerContext),
+          passThroughOnException: /* @__PURE__ */ __name(() => {
+            isFailOpen = true;
+          }, "passThroughOnException")
+        };
+        const response = await handler(context);
+        if (!(response instanceof Response)) {
+          throw new Error("Your Pages function should return a Response");
+        }
+        return cloneResponse(response);
+      } else if ("ASSETS") {
+        const response = await env["ASSETS"].fetch(request);
+        return cloneResponse(response);
+      } else {
+        const response = await fetch(request);
+        return cloneResponse(response);
+      }
+    }, "next");
+    try {
+      return await next();
+    } catch (error) {
+      if (isFailOpen) {
+        const response = await env["ASSETS"].fetch(request);
+        return cloneResponse(response);
+      }
+      throw error;
+    }
+  }
+};
+var cloneResponse = /* @__PURE__ */ __name((response) => (
+  // https://fetch.spec.whatwg.org/#null-body-status
+  new Response(
+    [101, 204, 205, 304].includes(response.status) ? null : response.body,
+    response
+  )
+), "cloneResponse");
+export {
+  pages_template_worker_default as default
+};
+
+------formdata-undici-006637967645--

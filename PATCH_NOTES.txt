@@ -1,0 +1,8 @@
+NERDSPACE LABS // WAYFINDER
+Alpha 0.4.5 - OAuth Diagnostics
+
+- Fixed OAuth callback behavior that mislabeled every Twitch authorization error as "cancelled".
+- Added safe OAuth error-code mapping without exposing Twitch free-form error descriptions.
+- Added specific UI guidance for access_denied, redirect_mismatch, invalid_client, invalid_scope, invalid_request, server errors, and temporary availability errors.
+- Added /api/auth/login?force=1 retry path using Twitch force_verify=true after an access-denied response.
+- Preserves OIDC openid-only authorization, state/nonce checks, ID-token verification, token non-persistence, revenue privacy, Pages Functions, and D1/EventSub support.
