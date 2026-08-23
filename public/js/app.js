@@ -5,6 +5,7 @@ import { buildIntelligence } from './intelligence.js';
 import { fetchAuthSession, disconnectTwitch, syncEventSub } from './auth.js';
 import { fetchTwitchData, fetchTrackerEnrichment, matchRowsToVods, attachObservedEventContext } from './enrichment.js';
 import { DATA_CONTRACT, buildCrossSourceCheck } from './supported-data.js';
+import { buildThirtyDayAnalysis, renderThirtyDayAnalysis } from './thirty-day.js';
 import { getContexts, setContext, getExperiments, addExperiment, removeExperiment, getGoal, setGoal } from './storage.js';
 import {
   setBusy, toast, renderAuth, renderMetrics, renderBaselineCallout, renderFlightPlan, renderInsights, renderScorecard,
@@ -25,6 +26,8 @@ const state = {
   experiments: getExperiments(),
   goal: getGoal(),
   currentContextRow: null,
+  mode: 'csv',
+  last30: null,
 };
 
 function simpleHash(value) {
@@ -154,7 +157,54 @@ function bindDynamicActions() {
   }));
 }
 
+function setAnalysisMode(mode) {
+  state.mode = mode === 'last30' ? 'last30' : 'csv';
+  try { sessionStorage.setItem('wayfinder.analysis-mode', state.mode); } catch {}
+  const last30 = state.mode === 'last30';
+  document.querySelector('#mode-last30').classList.toggle('active', last30);
+  document.querySelector('#mode-csv').classList.toggle('active', !last30);
+  document.querySelector('#last30-shell').hidden = !last30;
+  document.querySelector('#csv-shell').hidden = last30;
+  document.querySelector('#empty-state').hidden = last30 || Boolean(state.intelligence);
+  document.querySelector('#workspace').hidden = last30 || !state.intelligence;
+  document.querySelector('#mode-note').innerHTML = last30
+    ? '<strong>Last 30 Days</strong> uses a rolling TwitchTracker aggregate plus supported first-party Twitch context. It intentionally has fewer conclusions than CSV Period.'
+    : '<strong>CSV Period</strong> uses the uploaded Twitch export as authoritative performance data and supports the deepest Wayfinder analysis.';
+  document.querySelector('#download-button').disabled = last30 ? !state.last30 : !state.intelligence;
+  diagnostic('info', 'analysis-mode', `Analysis mode selected: ${state.mode}`);
+}
+
+async function analyzeLast30() {
+  if (!state.auth.connected) {
+    toast('Connect Twitch before running Last 30 Days.', 'warning');
+    document.querySelector('#twitch-connect')?.focus();
+    return;
+  }
+  setBusy(true, 'Building supported 30-day evidence…');
+  diagnostic('info', 'last30', 'Last 30 Days analysis started', { connected: true });
+  try {
+    let eventsub = state.auth.eventsub || null;
+    try { eventsub = await syncEventSub(state.auth.csrf); } catch (error) { eventsub = { configured: false, warnings: [error.message] }; }
+    const [twitchResult, trackerResult] = await Promise.allSettled([fetchTwitchData(), fetchTrackerEnrichment()]);
+    if (twitchResult.status !== 'fulfilled') throw twitchResult.reason;
+    state.twitch = { ...twitchResult.value, eventsub };
+    state.tracker = trackerResult.status === 'fulfilled' ? trackerResult.value : null;
+    if (trackerResult.status !== 'fulfilled') diagnostic('warning', 'twitchtracker', 'TwitchTracker unavailable for Last 30 Days', { failureType: 'request', message: trackerResult.reason?.message || 'Unavailable' });
+    state.last30 = buildThirtyDayAnalysis(state.twitch, state.tracker);
+    const results = document.querySelector('#last30-results');
+    results.innerHTML = renderThirtyDayAnalysis(state.last30);
+    results.hidden = false;
+    document.querySelector('#download-button').disabled = false;
+    diagnostic('info', 'last30', 'Last 30 Days analysis completed', { source: state.tracker ? 'twitch+twitchtracker' : 'twitch-only', rowCount: state.twitch?.videos?.length || 0 });
+    toast(state.tracker ? 'Last 30 Days analysis ready.' : 'Twitch context loaded; TwitchTracker performance summary was unavailable.', state.tracker ? 'success' : 'warning');
+  } catch (error) {
+    diagnostic('error', 'last30', 'Last 30 Days analysis failed', { failureType: 'request', message: error.message || 'Unable to analyze' });
+    toast(error.message || 'Unable to analyze the last 30 days.', 'error');
+  } finally { setBusy(false); }
+}
+
 async function handleFiles(fileList) {
+  setAnalysisMode('csv');
   diagnostic('info', 'csv', 'CSV import started', { fileCount: fileList?.length || 0 });
   const files = [...fileList].filter((file) => file.name.toLowerCase().endsWith('.csv'));
   if (!files.length) return toast('Choose at least one CSV file.', 'warning');
@@ -163,7 +213,9 @@ async function handleFiles(fileList) {
     const result = await parseFiles(files);
     if (!result.rows.length) throw new Error('No usable CSV rows were found.');
     state.files = files.map((file) => ({ name: file.name, size: file.size, type: file.type }));
-    document.querySelector('#csv-file').value = ''; // Do not retain browser file handles after import.
+    document.querySelector('#csv-file').value = '';
+  document.querySelector('#last30-results').hidden = true; document.querySelector('#last30-results').innerHTML = '';
+  setAnalysisMode(state.mode); // Do not retain browser file handles after import.
     state.rows = result.rows;
     diagnostic('info', 'csv', 'CSV import completed', { rowCount: result.rows.length, fileCount: files.length, privateColumnsRemoved: result.mappings.reduce((sum, item) => sum + (item.privateColumnsRemoved || 0), 0), unsupportedColumns: result.mappings.reduce((sum, item) => sum + (item.unsupported?.length || 0), 0), granularity: [...new Set(result.mappings.map((item) => item.granularity))].join(', ') });
     state.mappings = result.mappings;
@@ -289,6 +341,12 @@ function createExperimentFromForm() {
 }
 
 function exportReport() {
+  if (state.mode === 'last30') {
+    if (!state.last30) return;
+    const report = { app: APP_CONFIG.productName, version: APP_CONFIG.version, mode: 'last30', generatedAt: new Date().toISOString(), privacy: 'No CSV is used in Last 30 Days mode. OAuth tokens are not included.', analysis: state.last30 };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `wayfinder-last30-${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(url); return;
+  }
   if (!state.intelligence) return;
   const report = {
     product: APP_CONFIG.productName,
@@ -335,11 +393,13 @@ function activateTab(name) {
 
 function resetDataset() {
   diagnostic('info', 'app', 'Dataset reset');
-  state.rows = []; state.files = []; state.mappings = []; state.intelligence = null; state.twitch = null; state.tracker = null;
+  state.rows = []; state.files = []; state.mappings = []; state.intelligence = null; state.twitch = null; state.tracker = null; state.last30 = null;
   document.querySelector('#workspace').hidden = true;
   document.querySelector('#empty-state').hidden = false;
   document.querySelector('#download-button').disabled = true;
   document.querySelector('#csv-file').value = '';
+  document.querySelector('#last30-results').hidden = true; document.querySelector('#last30-results').innerHTML = '';
+  setAnalysisMode(state.mode);
   sourceStatus('#source-csv', 'idle', 'Waiting', 'Required source; processed locally');
   sourceStatus('#source-twitch', 'idle', state.auth.connected ? 'Connected account' : 'Optional', 'Supported Helix metadata + verified EventSub context');
   sourceStatus('#source-tracker', 'idle', 'Optional', 'Sanitized 30-day corroboration only');
@@ -403,6 +463,9 @@ async function init() {
   diagnostic('info', 'launch', 'Wayfinder launched', { runtime: 'browser' });
   showAuthResult();
   await refreshAuth({ initial: true });
+  let initialMode = 'csv';
+  try { initialMode = sessionStorage.getItem('wayfinder.analysis-mode') || 'csv'; } catch {}
+  setAnalysisMode(initialMode);
   setInterval(() => refreshAuth({ initial: true }), 55 * 60_000);
 
   const input = document.querySelector('#csv-file');
@@ -412,6 +475,9 @@ async function init() {
   dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
   dropzone.addEventListener('drop', (event) => { event.preventDefault(); dropzone.classList.remove('dragging'); handleFiles(event.dataTransfer.files); });
 
+  document.querySelector('#mode-last30').addEventListener('click', () => setAnalysisMode('last30'));
+  document.querySelector('#mode-csv').addEventListener('click', () => setAnalysisMode('csv'));
+  document.querySelector('#run-last30').addEventListener('click', analyzeLast30);
   document.querySelector('#sample-button').addEventListener('click', loadDemo);
   document.querySelector('#download-button').addEventListener('click', exportReport);
   document.querySelector('#reset-button').addEventListener('click', resetDataset);

@@ -15,7 +15,7 @@
       <span class="brand-wordmark"><small>NERDSPACE LABS</small><span class="brand-divider" aria-hidden="true">//</span><strong data-product>WAYFINDER</strong></span>
     </a>
     <div class="header-actions">
-      <span class="version" data-version>Alpha 0.5.0</span>
+      <span class="version" data-version>Alpha 0.6.0</span>
       <a id="twitch-connect" class="twitch-button" href="/api/auth/login" role="button">Connect Twitch</a>
       <button id="download-button" class="ghost-button" type="button" disabled>Export report</button>
       <button id="reset-button" class="ghost-button" type="button">Reset</button>
@@ -43,7 +43,30 @@
       <div id="auth-details" class="auth-details"><span class="status-dot idle"></span><strong>Not connected</strong></div>
     </section>
 
-    <section class="upload-shell">
+    <section class="analysis-mode-shell" aria-labelledby="analysis-mode-title">
+      <div class="section-heading mode-heading"><div><span class="eyebrow">ANALYSIS MODE</span><h2 id="analysis-mode-title">Choose the evidence window</h2></div><p>Use an automatic rolling snapshot or upload an official Twitch export for a specific month or period.</p></div>
+      <div class="mode-grid">
+        <button id="mode-last30" class="mode-card" type="button">
+          <span class="mode-kicker">AUTOMATIC</span><strong>Last 30 Days</strong>
+          <small>TwitchTracker aggregate performance + supported Twitch API/EventSub context. Requires Twitch connection.</small>
+        </button>
+        <button id="mode-csv" class="mode-card active" type="button">
+          <span class="mode-kicker">DEEP ANALYSIS</span><strong>CSV Period</strong>
+          <small>Upload a Twitch Analytics export for a specific month or date range. Revenue fields are discarded locally.</small>
+        </button>
+      </div>
+      <p id="mode-note" class="mode-note"><strong>CSV Period</strong> is selected. This mode supports the deepest Wayfinder analysis.</p>
+    </section>
+
+    <section id="last30-shell" class="last30-shell" hidden>
+      <div class="last30-callout">
+        <div><span class="eyebrow">ROLLING MODE</span><h2>Analyze the current last 30 days</h2><p>Wayfinder will use only supported fields. It will not infer historical per-stream average viewers, categories, or best-day performance from Twitch API data that does not provide them.</p></div>
+        <button id="run-last30" class="primary-button standalone" type="button">Analyze Last 30 Days</button>
+      </div>
+      <div id="last30-results" hidden></div>
+    </section>
+
+    <section id="csv-shell" class="upload-shell">
       <label id="dropzone" class="dropzone" for="csv-file">
         <input id="csv-file" type="file" accept=".csv,text/csv" multiple hidden>
         <span class="dropzone-kicker">TWITCH ANALYTICS CSV</span>

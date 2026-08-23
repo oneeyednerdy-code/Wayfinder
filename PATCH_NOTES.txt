@@ -1,14 +1,30 @@
-NERDSPACE LABS WAYFINDER — ALPHA 0.5.0
-WORKERS + GIT ARCHITECTURE
+NERDSPACE LABS WAYFINDER — ALPHA 0.6.0
+Dual-Mode Evidence Engine
 
-- Converted deployment architecture from Cloudflare Pages to a single Cloudflare Worker.
-- Added src/index.js as the explicit Worker entry point.
-- Added Cloudflare Workers Static Assets for the existing public/ frontend.
-- Added explicit /api/* routing for OAuth, session, Twitch enrichment, EventSub, TwitchTracker, and health endpoints.
-- Added ASSETS binding and SPA fallback.
-- Preserved D1 binding WAYFINDER_DB and the existing nerdspace-wayfinder database.
-- Preserved Twitch OIDC hardening and no-persisted-user-token design.
-- Preserved revenue privacy boundary and supported-data contract.
-- Preserved Wormhole-style privacy-safe diagnostics log.
-- Updated deployment workflow to `wrangler deploy` and Cloudflare Workers Builds Git integration.
-- Target Worker name is `wayfinder`, enabling a workers.dev URL such as wayfinder.oneeyednerdy.workers.dev when the account subdomain is oneeyednerdy.
+ADDED
+- Last 30 Days automatic analysis mode for connected Twitch accounts.
+- CSV Period mode for specific month/date-range Twitch Analytics exports.
+- Source-aware 30-day evidence engine combining supported TwitchTracker aggregate fields with Twitch API/EventSub context.
+- Rolling 30-day baseline cards, evidence ledger, flight plan, and guardrails.
+- Mode persistence across Twitch OAuth navigation in the same browser tab.
+- Dedicated Last 30 Days JSON report export.
+
+DATA RULES
+- Twitch CSV remains authoritative whenever a CSV is supplied.
+- TwitchTracker may provide the aggregate performance baseline only in automatic Last 30 Days mode.
+- TwitchTracker never overrides a Twitch CSV.
+- Twitch API VOD data is official broadcast context but does not supply historical per-stream average viewers.
+- VOD view counts are never used as live average viewers.
+- Current Twitch category is never used as proof of an old stream's category.
+- Schedule entries remain planned context only.
+- EventSub provides verified observed events where Wayfinder has retained them.
+- Aggregate 30-day raid influence is not mathematically removed without first-party analytics granular enough to support that adjustment.
+
+PRIVACY
+- CSV revenue/earnings/payout fields remain discarded at import.
+- Last 30 Days mode requires no CSV upload.
+- Twitch user access and refresh tokens remain transient and are not stored.
+
+VALIDATION
+- 49 automated tests pass.
+- Browser and Worker JavaScript syntax validation passes.

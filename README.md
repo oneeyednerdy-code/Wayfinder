@@ -1,67 +1,40 @@
 # Nerdspace Labs // Wayfinder
 
-**Alpha 0.5.0 — Workers + Git Architecture**
+**Alpha 0.6.0 — Dual-Mode Evidence Engine**
 
-Wayfinder turns Twitch analytics exports into evidence, experiments, and next actions instead of cloning Twitch Analytics.
+Wayfinder turns Twitch data into transparent creator decisions without generative AI or mystery scoring.
 
-This release is built as a single Cloudflare Worker with Static Assets. The Worker serves the existing frontend from `public/` and explicitly routes all `/api/*` traffic through `src/index.js`.
+## Analysis modes
 
-## Architecture
+### Last 30 Days
+Requires a connected Twitch account. Wayfinder combines:
+- TwitchTracker's supported rolling 30-day aggregate summary fields for aggregate performance context.
+- Twitch Helix for official VOD, clip, current channel, and planned schedule context.
+- Twitch EventSub/D1 history for verified events Wayfinder has observed, such as incoming raids and stream online/offline events.
 
-- `src/index.js` — Cloudflare Worker entry point and API router
-- `public/` — static Wayfinder frontend
-- `functions/` — reusable server modules for OAuth, Twitch, EventSub, TwitchTracker, D1, and security helpers
-- `migrations/` — D1 schema
-- `wrangler.jsonc` — Worker, Static Assets, workers.dev, and D1 configuration
-- `tests/` — regression tests
+This mode intentionally does **not** claim historical per-stream average viewers, best categories, or best streaming days unless a supported source actually provides the required evidence.
 
-## Target deployment
+### CSV Period
+Upload one or more Twitch Analytics CSV exports for a specific month or period. CSV files are parsed locally in the browser. Revenue, earnings, payout, proceeds, and income columns are discarded at the import boundary and never enter the intelligence model.
 
-Worker name: `wayfinder`
+When Twitch is connected, supported official Twitch context and matching EventSub history can enrich the CSV analysis. TwitchTracker is supplemental and never overrides Twitch's exported analytics.
 
-If the Cloudflare account workers.dev subdomain is `oneeyednerdy`, the URL is:
+## Source hierarchy
+1. Twitch Analytics CSV — authoritative performance data when supplied.
+2. Twitch API / EventSub — official context and verified observed events.
+3. TwitchTracker — aggregate 30-day input in automatic mode; supplemental corroboration in CSV mode.
+4. Creator annotations — explicit human context for events APIs cannot reliably establish historically.
 
-`https://wayfinder.oneeyednerdy.workers.dev`
+## Worker architecture
+Wayfinder runs as one Cloudflare Worker with Static Assets and explicit `/api/*` routing. D1 binding: `WAYFINDER_DB`.
 
-## Local development
-
-```powershell
+## Commands
+```bash
 npm install
 npm test
 npm run check
 npm run dev
-```
-
-## Deploy
-
-```powershell
-npx wrangler login
 npm run deploy
 ```
 
-Then verify:
-
-- `/api/health`
-- `/api/auth/session`
-- `/api/auth/login`
-
-## Git deployments
-
-Cloudflare Workers Builds can connect this Worker to GitHub or GitLab. Pushes to the selected production branch can deploy automatically with `npx wrangler deploy`.
-
-## D1
-
-Wayfinder expects:
-
-- binding: `WAYFINDER_DB`
-- database: `nerdspace-wayfinder`
-
-The included Wrangler configuration references the existing database ID configured for this project.
-
-## Privacy boundary
-
-Revenue and other monetary fields are discarded at CSV import and are not available to Wayfinder intelligence. Uploaded CSV contents remain browser-local. Twitch user access and refresh tokens are not persisted.
-
-## Diagnostics
-
-A privacy-safe diagnostics log is available at the bottom of the interface. It intentionally excludes tokens, OAuth values, URL query strings, CSV contents, revenue, creator identity, and message/chat content.
+See `DEPLOYMENT.md` and `SECURITY.md` for configuration details.

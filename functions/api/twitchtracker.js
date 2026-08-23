@@ -9,7 +9,7 @@ export async function onRequestGet({ request, env }) {
 
   try {
     const response = await fetch(`https://twitchtracker.com/api/channels/summary/${encodeURIComponent(login)}`, {
-      headers: { Accept: 'application/json', 'User-Agent': 'Nerdspace-Labs-Wayfinder/0.4' },
+      headers: { Accept: 'application/json', 'User-Agent': 'Nerdspace-Labs-Wayfinder/0.6' },
     });
     if (!response.ok) return json({ error: `TwitchTracker returned ${response.status}. Wayfinder analysis remains available.` }, 502, auth.setCookie ? { 'Set-Cookie': auth.setCookie } : {});
     const raw = await response.json();

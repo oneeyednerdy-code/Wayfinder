@@ -38,8 +38,8 @@ export const DATA_CONTRACT = [
     source: 'TwitchTracker',
     trust: 'Supplemental third-party',
     allowed: 'Allowlisted fields from TwitchTracker’s current 30-day channel summary response: rank, minutes streamed, average/max viewers, hours watched, follower gain and total followers.',
-    use: 'Corroborate a matching 30-day Twitch CSV window.',
-    limits: 'Never overrides Twitch CSV/API data and never drives a recommendation by itself.',
+    use: 'In CSV Period mode, corroborate a matching 30-day Twitch CSV window. In Last 30 Days mode, provide the rolling aggregate performance snapshot.',
+    limits: 'Never overrides an uploaded Twitch CSV. In Last 30 Days mode it may supply aggregate baseline metrics, but Wayfinder limits conclusions to what the aggregate can actually support.',
   },
   {
     source: 'Creator context',
