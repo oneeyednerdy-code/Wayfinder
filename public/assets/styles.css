@@ -499,3 +499,14 @@ textarea:focus-visible { outline-color: var(--purple-2); }
 
 /* Alpha 0.6.0 dual analysis modes */
 .analysis-mode-shell,.last30-shell{max-width:1200px;margin:0 auto 24px;padding:0 24px}.mode-heading{margin-bottom:14px}.mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.mode-card{appearance:none;text-align:left;border:1px solid rgba(151,94,255,.22);background:rgba(17,12,28,.82);color:inherit;border-radius:14px;padding:18px;cursor:pointer;transition:border-color .18s ease,transform .18s ease,background .18s ease}.mode-card:hover{transform:translateY(-1px);border-color:rgba(176,126,255,.55)}.mode-card.active{border-color:#9b65ff;background:rgba(89,44,150,.2);box-shadow:0 0 0 1px rgba(155,101,255,.12) inset}.mode-card strong{display:block;font-size:1.15rem;margin:4px 0 7px}.mode-card small{display:block;line-height:1.45;color:var(--muted)}.mode-kicker{font-size:.7rem;letter-spacing:.14em;color:#b996ff;font-weight:800}.mode-note{max-width:900px;margin:10px 0 0;color:var(--muted)}.last30-callout{display:flex;justify-content:space-between;gap:22px;align-items:center;border:1px solid rgba(151,94,255,.22);border-radius:16px;background:rgba(12,9,20,.88);padding:22px}.last30-callout p{max-width:760px;color:var(--muted);margin-bottom:0}#last30-results{margin-top:22px}.brief-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}.brief-meta span{font-size:.78rem;color:var(--muted);border:1px solid rgba(151,94,255,.18);border-radius:999px;padding:5px 9px}@media(max-width:760px){.mode-grid{grid-template-columns:1fr}.last30-callout{align-items:flex-start;flex-direction:column}.analysis-mode-shell,.last30-shell{padding:0 16px}}
+
+
+/* Wayfinder 0.6.1 — Nerdspace Intelligence transparency notice */
+.intelligence-notice { width:min(1460px, calc(100% - 40px)); margin:18px auto 0; padding:18px 20px; display:grid; grid-template-columns:auto 1fr; gap:16px; align-items:start; border:1px solid rgba(145,92,255,.28); border-radius:var(--radius); background:linear-gradient(180deg, rgba(90,48,150,.12), rgba(14,10,19,.76)); }
+.intelligence-mark { width:38px; height:38px; display:grid; place-items:center; border:1px solid rgba(170,126,255,.38); border-radius:9px; color:var(--purple-2); font-size:11px; font-weight:900; letter-spacing:.08em; background:rgba(117,69,200,.10); }
+.intelligence-copy { min-width:0; }
+.intelligence-copy .eyebrow { display:block; margin-bottom:5px; }
+.intelligence-copy h2 { margin:0 0 7px; color:var(--text); font-size:14px; line-height:1.25; }
+.intelligence-copy p { margin:0; color:var(--muted); font-size:11px; line-height:1.6; max-width:1050px; }
+.intelligence-copy .intelligence-detail { margin-top:6px; color:var(--muted-2, var(--muted)); }
+@media (max-width:680px) { .intelligence-notice { width:min(100% - 24px, 1460px); grid-template-columns:1fr; padding:16px; } .intelligence-mark { width:34px; height:34px; } }

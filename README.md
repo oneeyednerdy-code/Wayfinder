@@ -1,6 +1,6 @@
 # Nerdspace Labs // Wayfinder
 
-**Alpha 0.6.0 — Dual-Mode Evidence Engine**
+**Alpha 0.6.1 — Dual-Mode Evidence Engine**
 
 Wayfinder turns Twitch data into transparent creator decisions without generative AI or mystery scoring.
 

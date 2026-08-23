@@ -1,30 +1,19 @@
-NERDSPACE LABS WAYFINDER — ALPHA 0.6.0
-Dual-Mode Evidence Engine
+NERDSPACE LABS WAYFINDER — ALPHA 0.6.1
+Nerdspace Intelligence Transparency Notice
 
 ADDED
-- Last 30 Days automatic analysis mode for connected Twitch accounts.
-- CSV Period mode for specific month/date-range Twitch Analytics exports.
-- Source-aware 30-day evidence engine combining supported TwitchTracker aggregate fields with Twitch API/EventSub context.
-- Rolling 30-day baseline cards, evidence ledger, flight plan, and guardrails.
-- Mode persistence across Twitch OAuth navigation in the same browser tab.
-- Dedicated Last 30 Days JSON report export.
-
-DATA RULES
-- Twitch CSV remains authoritative whenever a CSV is supplied.
-- TwitchTracker may provide the aggregate performance baseline only in automatic Last 30 Days mode.
-- TwitchTracker never overrides a Twitch CSV.
-- Twitch API VOD data is official broadcast context but does not supply historical per-stream average viewers.
-- VOD view counts are never used as live average viewers.
-- Current Twitch category is never used as proof of an old stream's category.
-- Schedule entries remain planned context only.
-- EventSub provides verified observed events where Wayfinder has retained them.
-- Aggregate 30-day raid influence is not mathematically removed without first-party analytics granular enough to support that adjustment.
+- Permanent Nerdspace Intelligence transparency notice above the footer.
+- Clear explanation of what supported Twitch/EventSub context may be retained for Nerdspace Labs intelligence.
+- Explicit disclosure that uploaded CSV contents, revenue/monetary data, Twitch OAuth tokens, and private creator notes are not stored in Nerdspace Intelligence.
+- Reminder that official Twitch Analytics CSV data remains authoritative and TwitchTracker remains supplemental.
 
 PRIVACY
-- CSV revenue/earnings/payout fields remain discarded at import.
-- Last 30 Days mode requires no CSV upload.
-- Twitch user access and refresh tokens remain transient and are not stored.
+- No change to revenue privacy boundary.
+- No change to browser-local CSV processing.
+- No new OAuth scopes.
+- No new creator-sensitive fields are collected.
+- D1 remains limited to the supported event/context contract already implemented.
 
 VALIDATION
-- 49 automated tests pass.
-- Browser and Worker JavaScript syntax validation passes.
+- Existing automated suite retained.
+- Added UI regression coverage for the Nerdspace Intelligence notice and privacy language.
