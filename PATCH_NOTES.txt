@@ -1,19 +1,24 @@
-NERDSPACE LABS WAYFINDER — ALPHA 0.6.1
-Nerdspace Intelligence Transparency Notice
+NERDSPACE LABS WAYFINDER — ALPHA 0.6.2
+Decision Guidance + UI Fixes
 
-ADDED
-- Permanent Nerdspace Intelligence transparency notice above the footer.
-- Clear explanation of what supported Twitch/EventSub context may be retained for Nerdspace Labs intelligence.
-- Explicit disclosure that uploaded CSV contents, revenue/monetary data, Twitch OAuth tokens, and private creator notes are not stored in Nerdspace Intelligence.
-- Reminder that official Twitch Analytics CSV data remains authoritative and TwitchTracker remains supplemental.
+FIXED
+- Fixed New Experiment Cancel and close controls submitting the experiment form and triggering validation/errors.
+- Applied the same non-submit dialog behavior to Stream Fingerprint cancel controls.
+- Fixed Last 30 Days summary metadata inheriting the two-column Decision Brief grid and rendering as oversized rounded pills/circles.
+- Replaced the vague “Category roles need category data” message with a supported-data explanation and a concrete next step.
 
-PRIVACY
-- No change to revenue privacy boundary.
-- No change to browser-local CSV processing.
-- No new OAuth scopes.
-- No new creator-sensitive fields are collected.
-- D1 remains limited to the supported event/context contract already implemented.
+IMPROVED
+- Redesigned the Last 30 Days summary into a structured rolling brief with compact Window and Evidence cards.
+- Added an explicit Wayfinder Decision section to automatic Last 30 Days results.
+- Last 30 Days now presents DO NOW, DO NOT, TEST NEXT, and WATCH/NEED MORE DATA guidance when supported.
+- Added derived 30-day followers/hour and clips/hour reference metrics only when their supported aggregate inputs are available.
+- CSV Decision Brief now includes explicit DO NOW and DO NOT statements before the detailed evidence queue.
+- Category data gaps now explain why Wayfinder refuses to infer historical categories from the current channel category or VOD titles.
 
-VALIDATION
-- Existing automated suite retained.
-- Added UI regression coverage for the Nerdspace Intelligence notice and privacy language.
+DATA / PRIVACY
+- No revenue or monetary fields are introduced.
+- No source hierarchy changes: CSV remains authoritative for uploaded-period performance; Twitch API/EventSub remains official context; TwitchTracker remains supplemental/rolling aggregate context.
+- No unsupported historical category inference was added.
+
+TESTING
+- Added regressions for dialog cancellation, Last 30 Days layout, explicit decision guidance, and category-data gap messaging.

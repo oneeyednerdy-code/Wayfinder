@@ -1,6 +1,6 @@
 # Nerdspace Labs // Wayfinder
 
-**Alpha 0.6.1 — Dual-Mode Evidence Engine**
+**Alpha 0.6.2 — Dual-Mode Evidence Engine**
 
 Wayfinder turns Twitch data into transparent creator decisions without generative AI or mystery scoring.
 
@@ -38,3 +38,9 @@ npm run deploy
 ```
 
 See `DEPLOYMENT.md` and `SECURITY.md` for configuration details.
+
+## Alpha 0.6.2 decision guidance improvements
+
+Wayfinder now makes its conclusion more explicit. Automatic Last 30 Days results include **DO NOW**, **DO NOT**, **TEST NEXT**, and, when supported, **WATCH** or **NEED MORE DATA** cards. CSV analysis likewise surfaces an immediate recommended move and an explicit warning about what not to change before the deeper evidence ledger.
+
+The Last 30 Days summary layout was also rebuilt so the analysis window and evidence level render as compact metadata cards rather than inheriting the CSV Decision Brief grid. Experiment and Stream Fingerprint cancel controls are now non-submit buttons, preventing cancellation from triggering form validation or creation logic.

@@ -101,8 +101,18 @@ export function renderBars(items, valueKey, suffix = '', unit = 'streams') {
   }).join('');
 }
 
-export function renderCategoryRoles(items) {
-  if (!items.length) return '<p class="muted">Category roles need category data.</p>';
+export function renderCategoryRoles(items, options = {}) {
+  if (!items.length) {
+    const daily = Boolean(options.daily);
+    const title = daily ? 'Category roles are unavailable for this daily export' : 'No supported historical category data was found';
+    const body = daily
+      ? 'This Twitch CSV is aggregated by day and does not provide a supported category field. Wayfinder will not use the channel’s current category or a VOD title as proof of what was streamed historically.'
+      : 'Wayfinder needs a supported category/game field tied to the analyzed observations before it can compare category performance.';
+    const next = daily
+      ? 'For category decisions, use a Twitch export that includes category/game data or let Wayfinder collect prospective Twitch EventSub context for future broadcasts.'
+      : 'Upload a Twitch export with category/game data, then Wayfinder can compare reach, follower conversion, consistency, and sample size by category.';
+    return `<article class="data-gap-card"><span>DATA GAP</span><h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p><strong>What to do</strong><p>${escapeHtml(next)}</p></article>`;
+  }
   return items.map((item) => `<article class="role-card"><span>${escapeHtml(item.role)}</span><h3>${escapeHtml(item.key)}</h3><div class="role-stats"><div><small>Audience</small><strong>${formatSignedPercent(item.audienceDelta)}</strong></div><div><small>Conversion</small><strong>${formatSignedPercent(item.conversionDelta)}</strong></div><div><small>Consistency</small><strong>${Number.isFinite(item.consistency) ? `${formatNumber(item.consistency,0)}%` : '—'}</strong></div><div><small>Streams</small><strong>${item.n}</strong></div></div></article>`).join('');
 }
 
@@ -184,7 +194,9 @@ export function renderDecisionBrief(brief) {
     <div class="decision-brief-main">
       <span class="eyebrow">WAYFINDER BRIEF</span>
       <h2>${escapeHtml(brief.direction)}</h2>
-      <p>Current priority: <strong>${escapeHtml(brief.goal)}</strong>. ${escapeHtml(brief.next)}</p>
+      <p>Current priority: <strong>${escapeHtml(brief.goal)}</strong>.</p>
+      <div class="decision-directive do"><small>DO NOW</small><strong>${escapeHtml(brief.next)}</strong></div>
+      <div class="decision-directive avoid"><small>DO NOT</small><strong>${escapeHtml(brief.avoid || 'Do not change several variables at once. Verify one signal before rebuilding your strategy.')}</strong></div>
     </div>
     <div class="decision-brief-grid">
       <div><small>STRONGEST EVIDENCE</small><strong>${strongest ? escapeHtml(strongest.claim) : 'Not enough yet'}</strong><span>${strongest ? `${escapeHtml(strongest.evidence)} evidence · ${formatSignedPercent(strongest.effect)}` : 'Keep collecting comparable data'}</span></div>

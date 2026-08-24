@@ -399,11 +399,16 @@ function buildDecisionBrief({ goal, rawAnalysis, organicAnalysis, rows, evidence
   }
   if (goal === 'decline' && Number.isFinite(audienceChange)) next = 'Compare the recent period with the earlier baseline and test the largest changed condition first.';
   if (goal === 'growth' && Number.isFinite(audienceChange)) next = 'Protect the conditions that stayed strong in comparable observations before expanding them.';
+  let avoid = 'Do not change several variables at once; otherwise Wayfinder cannot tell which change helped or hurt.';
+  if (external) avoid = `Do not let ${external} externally influenced observation${external === 1 ? '' : 's'} redefine your normal baseline or drive schedule/category decisions.`;
+  else if (!strongest || ['Insufficient', 'Weak', 'Early'].includes(strongest.evidence)) avoid = 'Do not rebuild your schedule or category strategy from one standout result or a thin sample.';
+  else if (unexplained) avoid = `Do not treat ${unexplained} unexplained outlier${unexplained === 1 ? '' : 's'} as proof of a trend until the cause is understood.`;
   return {
     goal: goalNames[goal] || goalNames.overall,
     direction,
     strongest,
     next,
+    avoid,
     external,
     unexplained,
     health: dataHealth.rating,

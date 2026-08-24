@@ -88,7 +88,7 @@ This release does not require or deploy D1. Without D1, persistent EventSub hist
 
 ## Cloudflare Worker deployment boundary
 
-Wayfinder 0.6.1 runs as a single Cloudflare Worker with Static Assets. `src/index.js` is the only Worker entry point. It explicitly routes supported `/api/*` endpoints and serves all non-API requests through the `ASSETS` binding. This removes reliance on Pages file-based Function discovery.
+Wayfinder 0.6.2 runs as a single Cloudflare Worker with Static Assets. `src/index.js` is the only Worker entry point. It explicitly routes supported `/api/*` endpoints and serves all non-API requests through the `ASSETS` binding. This removes reliance on Pages file-based Function discovery.
 
 Static responses and API responses pass through the same security-header layer because `assets.run_worker_first` is enabled.
 
@@ -96,6 +96,6 @@ The D1 binding remains `WAYFINDER_DB`. Twitch secrets are Worker secrets and are
 
 The uploaded Twitch analytics CSV remains browser-local. Revenue fields are discarded before normalization and are not sent to the Worker.
 
-## Dual-mode evidence boundary (Alpha 0.6.1)
+## Dual-mode evidence boundary (Alpha 0.6.2)
 
 Last 30 Days mode does not manufacture granular historical Twitch analytics from Helix metadata. VOD view counts are not live average viewers, current category is not historical category proof, and planned schedules are not observed broadcasts. TwitchTracker aggregate data can serve as the rolling aggregate performance input only when no CSV is being used. An uploaded Twitch CSV remains authoritative over TwitchTracker.

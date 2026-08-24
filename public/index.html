@@ -246,7 +246,7 @@
 
   <dialog id="context-modal">
     <form method="dialog" id="context-form">
-      <div class="modal-head"><div><span class="eyebrow">STREAM FINGERPRINT</span><h2>Broadcast context</h2></div><button value="cancel" class="icon-button" aria-label="Close">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">STREAM FINGERPRINT</span><h2>Broadcast context</h2></div><button type="button" data-close class="icon-button" aria-label="Close">×</button></div>
       <p id="context-stream-label" class="modal-note"></p>
       <div class="check-grid">
         <label><input type="checkbox" name="raid"> Raid received</label>
@@ -261,13 +261,13 @@
         <label><input type="checkbox" name="firstCategory"> First time in category</label>
       </div>
       <label class="stack-field"><span>Notes (stored only in this browser)</span><textarea name="notes" maxlength="500" placeholder="Optional context that helps explain this stream"></textarea></label>
-      <div class="modal-actions"><button value="cancel" class="ghost-button">Cancel</button><button id="save-context" value="default" class="primary-button standalone">Save context</button></div>
+      <div class="modal-actions"><button type="button" data-close class="ghost-button">Cancel</button><button id="save-context" value="default" class="primary-button standalone">Save context</button></div>
     </form>
   </dialog>
 
   <dialog id="experiment-modal">
     <form method="dialog" id="experiment-form">
-      <div class="modal-head"><div><span class="eyebrow">NEW EXPERIMENT</span><h2>Test one variable</h2></div><button value="cancel" class="icon-button" aria-label="Close">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow">NEW EXPERIMENT</span><h2>Test one variable</h2></div><button type="button" data-close class="icon-button" aria-label="Close">×</button></div>
       <div class="form-grid">
         <label class="stack-field"><span>Name</span><input name="name" required maxlength="80" placeholder="Noon start test"></label>
         <label class="stack-field"><span>Variable</span><select name="type"><option value="start">Start hour</option><option value="duration">Duration band</option><option value="category">Category</option></select></label>
@@ -276,7 +276,7 @@
         <label class="stack-field"><span>Minimum samples per side</span><input name="minimum" type="number" min="2" max="20" value="4"></label>
       </div>
       <p class="modal-note">Start-hour values use ±1 hour. Duration values use &lt; 2h, 2–3h, 3–4h, 4–5h, or 5h+. Category values match case-insensitively.</p>
-      <div class="modal-actions"><button value="cancel" class="ghost-button">Cancel</button><button id="save-experiment" value="default" class="primary-button standalone">Create experiment</button></div>
+      <div class="modal-actions"><button type="button" data-close class="ghost-button">Cancel</button><button id="save-experiment" value="default" class="primary-button standalone">Create experiment</button></div>
     </form>
   </dialog>
 

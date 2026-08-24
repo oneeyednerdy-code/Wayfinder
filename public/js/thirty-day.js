@@ -33,6 +33,8 @@ export function buildThirtyDayAnalysis(twitch, tracker, now = new Date()) {
   const followers = num(summary.followers);
   const activeHours = Number.isFinite(minutesStreamed) ? minutesStreamed / 60 : null;
   const avgVodHours = videos.length ? vodMinutes / videos.length / 60 : null;
+  const followersPerHour = Number.isFinite(followers) && Number.isFinite(activeHours) && activeHours > 0 ? followers / activeHours : null;
+  const clipsPerHour = Number.isFinite(activeHours) && activeHours > 0 ? clips.length / activeHours : null;
 
   const dataCoverage = [avgViewers, maxViewers, minutesStreamed, hoursWatched, followers].filter(Number.isFinite).length;
   const confidence = dataCoverage >= 4 ? 'MODERATE' : dataCoverage >= 2 ? 'EARLY' : 'INSUFFICIENT';
@@ -62,10 +64,30 @@ export function buildThirtyDayAnalysis(twitch, tracker, now = new Date()) {
     'Do not mathematically remove raid viewers from a 30-day aggregate unless a matching first-party analytics breakdown supports it.',
   ];
 
+  const directives = [];
+  if (trackerAvailable && Number.isFinite(avgViewers)) {
+    directives.push({ kind: 'do', label: 'DO NOW', title: `Use ${fmt(avgViewers)} as your rolling reference`, body: 'Compare future 30-day checks against this same rolling metric. Keep it as a monitoring baseline, not a target you must chase every stream.' });
+  } else {
+    directives.push({ kind: 'need', label: 'NEED MORE DATA', title: 'Do not make a performance change yet', body: 'Twitch is connected, but this mode does not currently have a supported aggregate performance baseline. Upload a Twitch Analytics CSV for decision-grade analysis.' });
+  }
+  if (raids.length) {
+    directives.push({ kind: 'avoid', label: 'DO NOT', title: 'Do not treat raid-influenced movement as organic growth', body: `${raids.length} verified incoming raid event${raids.length === 1 ? '' : 's'} occurred in this window. Use a matching CSV before changing schedule, category, or stream length around that movement.` });
+  } else {
+    directives.push({ kind: 'avoid', label: 'DO NOT', title: 'Do not pick a “best day” or “best game” from this mode', body: 'The automatic 30-day sources do not provide the historical per-stream performance and category evidence needed to support those claims.' });
+  }
+  if (videos.length >= 3) {
+    directives.push({ kind: 'test', label: 'TEST NEXT', title: 'Run a matching-period CSV analysis', body: `Twitch shows ${videos.length} archived broadcasts in this window. A CSV covering the same dates can test schedule, duration, engagement, conversion, and category hypotheses against the rolling baseline.` });
+  } else {
+    directives.push({ kind: 'test', label: 'TEST NEXT', title: 'Build a larger comparison window', body: 'Keep collecting broadcasts under reasonably stable conditions. Wayfinder needs repeated observations before it can separate normal variance from a useful pattern.' });
+  }
+  if (Number.isFinite(followersPerHour)) {
+    directives.push({ kind: 'watch', label: 'WATCH', title: `${fmt(followersPerHour, 2)} followers per streamed hour`, body: 'Use this only as a 30-day efficiency reference. A CSV is required to determine which specific broadcasts or conditions drove it.' });
+  }
+
   return {
-    mode: 'last30', period: { start, end: now }, confidence, brief, evidence, actions, guardrails,
+    mode: 'last30', period: { start, end: now }, confidence, brief, evidence, actions, guardrails, directives,
     metrics: [
-      ['Avg viewers', avgViewers, 'TwitchTracker'], ['Peak viewers', maxViewers, 'TwitchTracker'], ['Hours streamed', activeHours, 'TwitchTracker'], ['Hours watched', hoursWatched, 'TwitchTracker'], ['Followers gained', followers, 'TwitchTracker'],
+      ['Avg viewers', avgViewers, 'TwitchTracker'], ['Peak viewers', maxViewers, 'TwitchTracker'], ['Hours streamed', activeHours, 'TwitchTracker'], ['Hours watched', hoursWatched, 'TwitchTracker'], ['Followers gained', followers, 'TwitchTracker'], ['Followers / hour', followersPerHour, 'Derived from supported 30-day totals'], ['Clips / hour', clipsPerHour, 'Derived from Twitch clips + streamed hours'],
       ['Archive VODs', videos.length, 'Twitch API'], ['Clips', clips.length, 'Twitch API'], ['Clip views', clipViews, 'Twitch API'], ['Verified raids', raids.length, 'EventSub'], ['Raid viewers observed', raidViewers, 'EventSub'],
     ],
     context: { videos: videos.length, clips: clips.length, onlineEvents: online.length, offlineEvents: offline.length, channelUpdates: updates.length, raids: raids.length, raidViewers, avgVodHours, currentCategory: twitch?.channel?.game_name || null, currentTitle: twitch?.channel?.title || null },
@@ -78,7 +100,12 @@ export function renderThirtyDayAnalysis(a) {
   const actions = a.actions.map((x) => `<article class="flight-card ${x.type}"><span>${x.type.toUpperCase()}</span><h3>${x.title}</h3><p>${x.body}</p></article>`).join('');
   const evidence = a.evidence.map((x) => `<article class="evidence-card"><div><span class="confidence ${x.level.toLowerCase()}">${x.level}</span><strong>${x.label}</strong></div><p>${x.detail}</p></article>`).join('');
   const guards = a.guardrails.map((g) => `<article class="guardrail-card"><strong>Do not overclaim</strong><p>${g}</p></article>`).join('');
-  return `<section class="decision-brief"><span class="eyebrow">LAST 30 DAYS</span><h2>Rolling evidence snapshot</h2><p>${a.brief}</p><div class="brief-meta"><span>${a.period.start.toLocaleDateString()} – ${a.period.end.toLocaleDateString()}</span><span>Evidence: ${a.confidence}</span></div></section>
+  const directives = (a.directives || []).map((x) => `<article class="decision-action ${x.kind}"><span>${x.label}</span><h3>${x.title}</h3><p>${x.body}</p></article>`).join('');
+  return `<section class="rolling-brief">
+      <div class="rolling-brief-copy"><span class="eyebrow">LAST 30 DAYS</span><h2>Rolling evidence snapshot</h2><p>${a.brief}</p></div>
+      <div class="rolling-brief-meta"><div><small>WINDOW</small><strong>${a.period.start.toLocaleDateString()} – ${a.period.end.toLocaleDateString()}</strong></div><div><small>EVIDENCE</small><strong>${a.confidence}</strong></div></div>
+    </section>
+    <div class="section-heading"><div><span class="eyebrow">WAYFINDER DECISION</span><h2>What to do — and what not to do</h2></div><p>Automatic mode gives explicit next moves while staying inside what the supported sources can actually prove.</p></div><div class="decision-action-grid">${directives}</div>
     <div class="section-heading"><div><span class="eyebrow">ROLLING BASELINE</span><h2>Supported 30-day signals</h2></div><p>TwitchTracker supplies aggregate performance; Twitch supplies first-party activity and event context.</p></div><div class="metric-grid">${metricCards}</div>
     <div class="section-heading"><div><span class="eyebrow">FLIGHT PLAN</span><h2>What this mode can support</h2></div></div><div class="flight-grid">${actions || '<p>No supported actions yet.</p>'}</div>
     <div class="section-heading"><div><span class="eyebrow">EVIDENCE LEDGER</span><h2>Source-aware confidence</h2></div></div><div class="evidence-grid">${evidence}</div>

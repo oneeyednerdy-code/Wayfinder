@@ -109,7 +109,7 @@ function renderWorkspace() {
   document.querySelector('#duration-bars').innerHTML = renderBars(i.organicAnalysis.byDuration, 'avgViewers', '', patternUnit);
   document.querySelector('#category-bars').innerHTML = renderBars(i.organicAnalysis.byCategory.slice(0, 10), 'avgViewers', '', patternUnit);
   document.querySelector('#conversion-bars').innerHTML = renderBars([...i.organicAnalysis.byCategory].filter((x) => Number.isFinite(x.followersPerHour)).sort((a,b) => b.followersPerHour-a.followersPerHour).slice(0,10), 'followersPerHour', '', patternUnit);
-  document.querySelector('#category-roles').innerHTML = renderCategoryRoles(i.categoryRoles.slice(0, 12));
+  document.querySelector('#category-roles').innerHTML = renderCategoryRoles(i.categoryRoles.slice(0, 12), { daily: dailyOnly });
   document.querySelector('#change-grid').innerHTML = renderChangeGrid(i.whatChanged);
   document.querySelector('#raid-retention').innerHTML = renderRaidRetention(i.raidRetention);
   document.querySelector('#data-health').innerHTML = renderHealth(i.dataHealth);
@@ -505,7 +505,10 @@ async function init() {
   });
   document.querySelector('#new-experiment').addEventListener('click', () => document.querySelector('#experiment-modal').showModal());
   document.querySelector('#experiment-form').addEventListener('submit', (event) => {
-    event.preventDefault(); createExperimentFromForm(); document.querySelector('#experiment-modal').close();
+    event.preventDefault();
+    if (event.submitter?.value === 'cancel') { document.querySelector('#experiment-modal').close('cancel'); return; }
+    createExperimentFromForm();
+    document.querySelector('#experiment-modal').close('default');
   });
 
   document.querySelector('#diagnostics-download').addEventListener('click', () => {

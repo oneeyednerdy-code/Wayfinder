@@ -1,4 +1,4 @@
-# Nerdspace Labs Wayfinder Alpha 0.6.1 — Cloudflare Worker + Git Deployment
+# Nerdspace Labs Wayfinder Alpha 0.6.2 — Cloudflare Worker + Git Deployment
 
 This release is built for a single Cloudflare Worker with Static Assets, API routing, D1, Twitch OIDC, EventSub, Twitch enrichment, TwitchTracker context, and the Wayfinder frontend.
 
@@ -125,7 +125,7 @@ Cloudflare then builds and deploys the Worker from Git.
 
 Revenue is discarded at the browser CSV import boundary. Uploaded CSV contents are not sent to the Worker. Twitch user access and refresh tokens are not persisted. D1 stores only the narrow EventSub/creator context defined by Wayfinder.
 
-## Alpha 0.6.1 analysis modes
+## Alpha 0.6.2 analysis modes
 
 No additional OAuth scopes or Cloudflare bindings are required for the dual-mode engine.
 
