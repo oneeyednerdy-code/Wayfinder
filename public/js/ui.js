@@ -187,6 +187,20 @@ export function showMathModal(item) {
   modal.showModal();
 }
 
+
+export function renderEvidenceEngineOverview(intelligence) {
+  const windows = (intelligence.baselineWindows || []).map((item) => `<article class="engine-card"><span>${item.days}-DAY BASELINE</span><strong>${formatNumber(item.avgViewers,1)}</strong><small>${item.n} qualifying observations · ${formatNumber(item.hours,1)}h</small></article>`).join('');
+  const e = intelligence.efficiency || {};
+  const efficiency = [
+    ['Followers / hour', e.followersPerHour, 2], ['Engaged viewers / hour', e.engagedPerHour, 1], ['New engaged / hour', e.newEngagedPerHour, 1],
+    ['Chatters / hour', e.chattersPerHour, 1], ['Clips / hour', e.clipsPerHour, 2], ['Watch hours / stream hour', e.watchHoursPerStreamHour, 1],
+  ].map(([label,value,digits]) => `<div><small>${escapeHtml(label)}</small><strong>${formatNumber(value,digits)}</strong></div>`).join('');
+  const cp = intelligence.changePoint;
+  const change = cp ? `<article class="engine-change"><span>BASELINE SHIFT</span><h3>${cp.delta >= 0 ? 'Possible upward shift' : 'Possible downward shift'} around ${escapeHtml(cp.date.toLocaleDateString())}</h3><p>${formatNumber(cp.beforeAvg,1)} → ${formatNumber(cp.afterAvg,1)} avg viewers (${formatSignedPercent(cp.delta)}), using ${cp.beforeN} observations before and ${cp.afterN} after.</p><small>${escapeHtml(cp.confidence)} evidence · association, not proof of cause</small></article>` : `<article class="engine-change"><span>BASELINE SHIFT</span><h3>No meaningful change point detected</h3><p>The organic history does not currently support a sustained baseline break of at least 8% with usable samples on both sides.</p></article>`;
+  const status = intelligence.recommendationStatus || {};
+  return `<section class="engine-overview"><div class="engine-status ${status.status === 'ACTIONABLE' ? 'actionable' : 'hold'}"><div><span class="eyebrow">EVIDENCE ENGINE ${escapeHtml(intelligence.engineVersion || '0.7')}</span><h2>${escapeHtml(status.status || 'NO ACTION YET')}</h2><p>${escapeHtml(status.reason || '')}</p></div><small>${escapeHtml(status.refreshRule || '')}</small></div><div class="engine-window-grid">${windows}</div><div class="engine-two-col"><article class="engine-efficiency"><span>CREATOR EFFICIENCY</span><div>${efficiency}</div></article>${change}</div></section>`;
+}
+
 export function renderDecisionBrief(brief) {
   if (!brief) return '';
   const strongest = brief.strongest;

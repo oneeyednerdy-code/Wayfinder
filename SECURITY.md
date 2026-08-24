@@ -1,4 +1,4 @@
-# Wayfinder Security Notes — Alpha 0.4.3
+# Wayfinder Security Notes — Alpha 0.7.0
 
 ## Twitch login model
 
@@ -88,7 +88,7 @@ This release does not require or deploy D1. Without D1, persistent EventSub hist
 
 ## Cloudflare Worker deployment boundary
 
-Wayfinder 0.6.2 runs as a single Cloudflare Worker with Static Assets. `src/index.js` is the only Worker entry point. It explicitly routes supported `/api/*` endpoints and serves all non-API requests through the `ASSETS` binding. This removes reliance on Pages file-based Function discovery.
+Wayfinder 0.7.0 runs as a single Cloudflare Worker with Static Assets. `src/index.js` is the only Worker entry point. It explicitly routes supported `/api/*` endpoints and serves all non-API requests through the `ASSETS` binding. This removes reliance on Pages file-based Function discovery.
 
 Static responses and API responses pass through the same security-header layer because `assets.run_worker_first` is enabled.
 
@@ -96,6 +96,11 @@ The D1 binding remains `WAYFINDER_DB`. Twitch secrets are Worker secrets and are
 
 The uploaded Twitch analytics CSV remains browser-local. Revenue fields are discarded before normalization and are not sent to the Worker.
 
-## Dual-mode evidence boundary (Alpha 0.6.2)
+## Dual-mode evidence boundary (Alpha 0.7.0)
 
 Last 30 Days mode does not manufacture granular historical Twitch analytics from Helix metadata. VOD view counts are not live average viewers, current category is not historical category proof, and planned schedules are not observed broadcasts. TwitchTracker aggregate data can serve as the rolling aggregate performance input only when no CSV is being used. An uploaded Twitch CSV remains authoritative over TwitchTracker.
+
+
+## Evidence Engine 2 boundary (Alpha 0.7.0)
+
+The intelligence engine computes 7/30/90-day organic baselines only from supported, dated observations after confirmed/material external influence has been classified. Change-point detection requires usable observations on both sides of a candidate shift and reports association only. Creator-efficiency metrics use non-monetary engagement/performance fields; revenue remains excluded at the CSV import boundary. Recommendations may return `NO ACTION YET` rather than manufacturing a weak conclusion. No new D1 schema or sensitive storage is introduced by 0.7.0.

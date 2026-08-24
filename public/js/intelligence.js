@@ -46,12 +46,17 @@ export function attachRaidEvents(inputRows, events = [], contexts = {}) {
     const csvHostRaidPct = Number(row.hostsRaidsViewerPct);
     const csvMaterialExternal = Number.isFinite(csvHostRaidPct) && csvHostRaidPct >= MATERIAL_HOST_RAID_PCT;
     const confirmedExternal = EXTERNAL_KEYS.some((key) => Boolean(manual[key])) || matches.length > 0 || csvMaterialExternal;
+    const influenceClass = matches.length ? 'confirmed-external'
+      : EXTERNAL_KEYS.some((key) => Boolean(manual[key])) ? 'creator-confirmed-external'
+      : csvMaterialExternal ? 'material-external'
+      : 'organic';
     return {
       ...row,
       context: manual,
       raidEvents: matches,
       raidViewers,
       confirmedExternal,
+      influenceClass,
       externalReasons: [
         ...(matches.length ? [`Twitch EventSub raid${matches.length > 1 ? 's' : ''}`] : []),
         ...(manual.raid && !matches.length ? ['Manually marked raid'] : []),
@@ -117,13 +122,88 @@ function buildCategoryRoles(analysis) {
     const consistency = Number.isFinite(variability) && category.avgViewers ? Math.max(0, 100 - (variability / category.avgViewers) * 100) : null;
     const audienceDelta = category.deltaAvgViewers;
     const conversionDelta = pctDelta(category.followersPerHour, overallConversion);
-    let role = 'Experimental';
-    if (category.n >= 6 && (audienceDelta ?? -999) >= 0 && (conversionDelta ?? -999) >= 0) role = 'Core Category';
-    else if (category.n >= 3 && (conversionDelta ?? -999) >= 20) role = 'Conversion Category';
-    else if (category.n >= 3 && (audienceDelta ?? -999) >= 20) role = 'Reach Category';
-    else if (category.n >= 4 && Number.isFinite(consistency) && consistency >= 75) role = 'Stable Category';
-    return { ...category, role, audienceDelta, conversionDelta, consistency };
+    const returningShare = avg(rows.map((row) => {
+      const returning = Number(row.returningEngagedViewers);
+      const engaged = Number(row.engagedViewers);
+      return Number.isFinite(returning) && Number.isFinite(engaged) && engaged > 0 ? returning / engaged * 100 : null;
+    }));
+    let role = 'Insufficient';
+    if (category.n >= 6 && (audienceDelta ?? -999) >= 0 && (conversionDelta ?? -999) >= 0) role = 'Core';
+    else if (category.n >= 4 && (audienceDelta ?? -999) >= 15 && (conversionDelta ?? -999) >= 5) role = 'Growth';
+    else if (category.n >= 4 && Number.isFinite(returningShare) && returningShare >= 65) role = 'Community';
+    else if (category.n >= 4 && Number.isFinite(consistency) && consistency < 45) role = 'Volatile';
+    else if (category.n >= 3) role = 'Experiment';
+    return { ...category, role, audienceDelta, conversionDelta, consistency, returningShare };
   });
+}
+
+function weightedAvgRows(rows) {
+  const usable = rows.filter((row) => Number.isFinite(row.avgViewers));
+  if (!usable.length) return null;
+  const weighted = usable.filter((row) => Number.isFinite(row.durationMinutes) && row.durationMinutes > 0);
+  if (weighted.length) {
+    const total = sum(weighted.map((row) => row.durationMinutes));
+    return total > 0 ? sum(weighted.map((row) => row.avgViewers * row.durationMinutes)) / total : avg(usable.map((row) => row.avgViewers));
+  }
+  return avg(usable.map((row) => row.avgViewers));
+}
+
+function buildBaselineWindows(rows) {
+  const dated = rows.filter((row) => row.date && !row.confirmedExternal && Number.isFinite(row.avgViewers)).sort((a,b) => a.date-b.date);
+  if (!dated.length) return [];
+  const end = dated.at(-1).date;
+  return [7, 30, 90].map((days) => {
+    const cutoff = new Date(end.getTime() - (days - 1) * 86400_000);
+    const sample = dated.filter((row) => row.date >= cutoff && row.date <= end);
+    return { days, n: sample.length, avgViewers: weightedAvgRows(sample), followersPerHour: analyzeRows(sample).summary.followersPerHour, hours: analyzeRows(sample).summary.totalHours, start: cutoff, end };
+  });
+}
+
+function buildEfficiency(rows) {
+  const organic = rows.filter((row) => !row.confirmedExternal && isDecisionObservation(row));
+  const analysis = analyzeRows(organic);
+  const h = analysis.summary.totalHours;
+  const sumField = (key) => sum(organic.map((row) => Number(row[key])));
+  return {
+    hours: h,
+    followersPerHour: analysis.summary.followersPerHour,
+    engagedPerHour: h > 0 ? sumField('engagedViewers') / h : null,
+    newEngagedPerHour: h > 0 ? sumField('newEngagedViewers') / h : null,
+    returningEngagedPerHour: h > 0 ? sumField('returningEngagedViewers') / h : null,
+    chattersPerHour: h > 0 ? sumField('uniqueChatters') / h : null,
+    clipsPerHour: h > 0 ? sumField('clipsCreated') / h : null,
+    watchHoursPerStreamHour: h > 0 && Number.isFinite(analysis.summary.totalWatchHours) ? analysis.summary.totalWatchHours / h : null,
+  };
+}
+
+function buildChangePoint(rows) {
+  const dated = rows.filter((row) => row.date && !row.confirmedExternal && Number.isFinite(row.avgViewers)).sort((a,b) => a.date-b.date);
+  if (dated.length < 8) return null;
+  let best = null;
+  for (let i=3; i<=dated.length-3; i++) {
+    const before = dated.slice(0,i);
+    const after = dated.slice(i);
+    const beforeAvg = weightedAvgRows(before);
+    const afterAvg = weightedAvgRows(after);
+    const delta = pctDelta(afterAvg, beforeAvg);
+    if (!Number.isFinite(delta)) continue;
+    const score = Math.abs(delta) * Math.min(before.length, after.length);
+    if (!best || score > best.score) best = { index:i, beforeN:before.length, afterN:after.length, beforeAvg, afterAvg, delta, date:dated[i].date, score };
+  }
+  if (!best || Math.abs(best.delta) < 8) return null;
+  return { ...best, confidence: evidenceLevel({ n: Math.min(best.beforeN,best.afterN), effect: best.delta, dataQuality: 100 }) };
+}
+
+function buildRecommendationStatus(evidenceLedger, rows) {
+  const actionable = evidenceLedger.find((item) => ['Strong','Moderate'].includes(item.evidence));
+  const latest = rows.filter((r)=>r.date).sort((a,b)=>b.date-a.date)[0]?.date || null;
+  const expiresAt = latest ? new Date(latest.getTime() + 45*86400_000) : null;
+  return {
+    status: actionable ? 'ACTIONABLE' : 'NO ACTION YET',
+    reason: actionable ? `${actionable.evidence} evidence supports a controlled next step.` : 'No claim has cleared Wayfinder’s moderate-evidence threshold. Keep conditions stable and collect more comparable observations.',
+    expiresAt,
+    refreshRule: 'Re-evaluate after 45 days or 4 new qualifying observations, whichever comes first.',
+  };
 }
 
 function completeness(rows, key) {
@@ -246,18 +326,26 @@ function buildFlightPlan({ goal, organicAnalysis, rawAnalysis, daySignals, categ
   const items = [];
   const strongestDay = organicAnalysis.byDay.filter((item) => item.n >= 3).sort((a, b) => (b.avgViewers || 0) - (a.avgViewers || 0))[0];
   const controlled = daySignals.filter((item) => item.comparisons >= 3 && Number.isFinite(item.controlledDelta)).sort((a, b) => b.controlledDelta - a.controlledDelta)[0];
-  const topRole = categoryRoles.find((item) => item.role === 'Core Category') || categoryRoles.find((item) => item.n >= 3);
+  const topRole = categoryRoles.find((item) => item.role === 'Core') || categoryRoles.find((item) => item.n >= 3);
   const durations = organicAnalysis.byDuration.filter((item) => item.n >= 3).sort((a, b) => (b.avgViewers || 0) - (a.avgViewers || 0));
   const externalCount = rows.filter((row) => row.confirmedExternal).length;
 
   if (goal === 'followers') {
     const topConversion = [...organicAnalysis.byCategory].filter((x) => x.n >= 3 && Number.isFinite(x.followersPerHour)).sort((a,b) => b.followersPerHour-a.followersPerHour)[0];
     if (topConversion) items.push({ type: 'protect', title: `Protect ${topConversion.key} conversion`, body: `${formatNumber(topConversion.followersPerHour,2)} followers/hour across ${topConversion.n} qualifying streams.`, math: [['Followers/hour', formatNumber(topConversion.followersPerHour,2)], ['Streams', String(topConversion.n)]] });
+  } else if (goal === 'efficiency') {
+    const duration = durations[0];
+    if (duration) items.push({ type: 'protect', title: `Protect the ${duration.key} efficiency lead`, body: `This duration band currently has the strongest organic viewer average among repeated duration groups. Do not add hours unless longer broadcasts outperform it under comparable conditions.`, math: [['Average viewers', formatNumber(duration.avgViewers,1)], ['Observations', String(duration.n)]] });
+  } else if (goal === 'community') {
+    const community = categoryRoles.filter((x)=>Number.isFinite(x.returningShare)).sort((a,b)=>(b.returningShare||0)-(a.returningShare||0))[0];
+    if (community) items.push({ type:'protect', title:`Protect ${community.key} returning-audience signal`, body:`Returning engaged viewers represent ${formatNumber(community.returningShare,1)}% of engaged viewers in this category sample.`, math:[['Returning share', `${formatNumber(community.returningShare,1)}%`], ['Observations', String(community.n)]] });
+  } else if (goal === 'engagement') {
+    items.push({ type:'protect', title:'Protect conditions that deepen participation', body:'Prioritize repeated chat, engaged-viewer, and clip-rate signals over raw reach when evaluating changes for this goal.', math:[['Rule','Engagement goal weights participation signals above raw viewer count']] });
   } else if (goal === 'schedule' && controlled) {
     items.push({ type: 'protect', title: `Protect the ${controlled.key} signal`, body: `Like-for-like checks estimate ${formatSignedPercent(controlled.controlledDelta)} performance versus comparable observations on other days.`, math: [['Comparable checks', String(controlled.comparisons)], ['Controlled difference', formatSignedPercent(controlled.controlledDelta)]] });
   } else if (controlled && controlled.controlledDelta >= 8) {
     items.push({ type: 'protect', title: `Protect the ${controlled.key} conditions while you verify them`, body: `This schedule signal still appears after a like-for-like comparison instead of relying on a simple day average.`, math: [['Comparable checks', String(controlled.comparisons)], ['Controlled difference', formatSignedPercent(controlled.controlledDelta)]] });
-  } else if (topRole?.role === 'Core Category' && topRole.n >= 6) {
+  } else if (topRole?.role === 'Core' && topRole.n >= 6) {
     items.push({ type: 'protect', title: `Protect ${topRole.key} as a core condition`, body: `It has repeated audience and conversion support instead of a single standout result.`, math: [['Role', topRole.role], ['Observations', String(topRole.n)], ['Audience delta', formatSignedPercent(topRole.audienceDelta)], ['Conversion delta', formatSignedPercent(topRole.conversionDelta)]] });
   } else {
     items.push({ type: 'protect', title: 'Protect your current baseline while testing', body: 'No single condition has earned enough controlled evidence to justify a broad strategy change yet. Change one variable at a time.', math: [['Organic observations', String(organicAnalysis.summary.rows)], ['Organic baseline', formatNumber(organicAnalysis.summary.avgViewers,1)]] });
@@ -389,7 +477,7 @@ function buildDecisionBrief({ goal, rawAnalysis, organicAnalysis, rows, evidence
   const direction = !Number.isFinite(audienceChange) ? 'Not enough history' : audienceChange >= 8 ? 'Recent audience is up' : audienceChange <= -8 ? 'Recent audience is down' : 'Recent audience is stable';
   const goalNames = {
     overall: 'overall channel decisions', audience: 'audience growth', followers: 'follower growth', schedule: 'schedule decisions',
-    categories: 'category decisions', efficiency: 'time efficiency', decline: 'understanding the decline', growth: 'understanding the growth',
+    categories: 'category decisions', efficiency: 'time efficiency', community: 'returning audience', engagement: 'engagement depth', decline: 'understanding the decline', growth: 'understanding the growth',
   };
   let next = 'Collect a few more comparable observations before making a large change.';
   if (strongest) {
@@ -551,6 +639,9 @@ export function buildIntelligence(inputRows, { contexts = {}, events = [], goal 
   const whatChanged = buildWhatChanged(decisionRows);
   const raidRetention = buildRaidRetention(decisionRows);
   const audienceQuality = buildAudienceQuality(organicRows);
+  const baselineWindows = buildBaselineWindows(decisionRows);
+  const efficiency = buildEfficiency(decisionRows);
+  const changePoint = buildChangePoint(decisionRows);
   const scorecard = buildScorecard(rawAnalysis, organicAnalysis, whatChanged, dataHealth);
   const flightPlan = buildFlightPlan({ goal, organicAnalysis, rawAnalysis, daySignals, categoryRoles, whatChanged, rows: decisionRows });
   const insights = augmentInsights(organicAnalysis, rawAnalysis, decisionRows, daySignals);
@@ -558,6 +649,7 @@ export function buildIntelligence(inputRows, { contexts = {}, events = [], goal 
   const decisionBrief = buildDecisionBrief({ goal, rawAnalysis, organicAnalysis, rows: decisionRows, evidenceLedger, dataHealth, whatChanged });
   const testSuggestions = buildTestSuggestions({ organicAnalysis, daySignals, categoryRoles, rows: decisionRows });
   const guardrails = buildGuardrails({ organicAnalysis, rows: decisionRows, categoryRoles, daySignals });
+  const recommendationStatus = buildRecommendationStatus(evidenceLedger, decisionRows);
   const evaluatedExperiments = experiments.map((experiment) => evaluateExperiment(experiment, decisionRows));
   return {
     rows: enrichedRows,
@@ -572,6 +664,11 @@ export function buildIntelligence(inputRows, { contexts = {}, events = [], goal 
     whatChanged,
     raidRetention,
     audienceQuality,
+    baselineWindows,
+    efficiency,
+    changePoint,
+    recommendationStatus,
+    engineVersion: '0.7',
     scorecard,
     flightPlan,
     insights,

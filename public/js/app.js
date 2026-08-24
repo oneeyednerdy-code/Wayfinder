@@ -10,7 +10,7 @@ import { getContexts, setContext, getExperiments, addExperiment, removeExperimen
 import {
   setBusy, toast, renderAuth, renderMetrics, renderBaselineCallout, renderFlightPlan, renderInsights, renderScorecard,
   renderBars, renderCategoryRoles, renderStreams, renderChangeGrid, renderRaidRetention, renderHealth, renderExperiments,
-  renderDecisionBrief, renderEvidenceLedger, renderTestSuggestions, renderGuardrails, renderAudienceQuality,
+  renderDecisionBrief, renderEvidenceEngineOverview, renderEvidenceLedger, renderTestSuggestions, renderGuardrails, renderAudienceQuality,
   renderDataContract, renderCrossSourceCheck, sourceStatus, showMathModal, escapeHtml,
 } from './ui.js';
 
@@ -94,6 +94,7 @@ function renderWorkspace() {
   document.querySelector('#workspace').hidden = false;
   document.querySelector('#download-button').disabled = false;
   document.querySelector('#goal-select').value = state.goal;
+  document.querySelector('#evidence-engine-overview').innerHTML = renderEvidenceEngineOverview(i);
   document.querySelector('#decision-brief').innerHTML = renderDecisionBrief(i.decisionBrief);
   document.querySelector('#metric-grid').innerHTML = renderMetrics(i);
   document.querySelector('#baseline-callout').innerHTML = renderBaselineCallout(i);

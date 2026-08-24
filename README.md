@@ -1,6 +1,13 @@
 # Nerdspace Labs // Wayfinder
 
-**Alpha 0.6.2 — Dual-Mode Evidence Engine**
+
+## Alpha 0.7.0 — Evidence Engine 2
+
+Wayfinder now evaluates multiple organic baselines, creator efficiency, possible sustained baseline shifts, external-influence classes, and recommendation strength before telling a creator to change anything. The decision layer can explicitly return **NO ACTION YET** when the evidence is too thin. Category roles now describe the job a category appears to perform rather than naming a single “best game.”
+
+The Evidence Engine remains deterministic and source-aware: same supported data + same engine version produces the same result. Revenue is excluded before normalization and never participates in the model.
+
+**Alpha 0.7.0 — Dual-Mode Evidence Engine**
 
 Wayfinder turns Twitch data into transparent creator decisions without generative AI or mystery scoring.
 
@@ -39,7 +46,7 @@ npm run deploy
 
 See `DEPLOYMENT.md` and `SECURITY.md` for configuration details.
 
-## Alpha 0.6.2 decision guidance improvements
+## Alpha 0.7.0 decision guidance improvements
 
 Wayfinder now makes its conclusion more explicit. Automatic Last 30 Days results include **DO NOW**, **DO NOT**, **TEST NEXT**, and, when supported, **WATCH** or **NEED MORE DATA** cards. CSV analysis likewise surfaces an immediate recommended move and an explicit warning about what not to change before the deeper evidence ledger.
 
